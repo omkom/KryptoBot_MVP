@@ -8,7 +8,7 @@
 const Redis = require('ioredis');
 const { PublicKey, TOKEN_PROGRAM_ID } = require('@solana/web3.js');
 const { Metadata } = require('@metaplex-foundation/mpl-token-metadata');
-const { getConnection } = require('./shared/connection');
+const { getConnection } = require('/usr/src/app/shared/connection');
 const { createLogger } = require('./shared/logger');
 const config = require('./shared/config').default;
 const { REDIS_CHANNELS, SOLANA_ADDRESSES, KNOWN_TOKENS, REGEX_PATTERNS } = require('./shared/constants');

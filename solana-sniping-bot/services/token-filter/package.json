@@ -1,3 +1,4 @@
+// services/token-filter/package.json
 {
   "name": "token-filter",
   "version": "1.0.0",
@@ -9,7 +10,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
+  "description": "Solana Memecoin Bot - Token Filter Service",
   "dependencies": {
     "@metaplex-foundation/mpl-token-metadata": "^2.5.2",
     "@solana/spl-token": "^0.3.7",

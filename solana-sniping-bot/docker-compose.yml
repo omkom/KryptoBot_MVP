@@ -8,7 +8,6 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
-      - ./shared:/shared
     restart: unless-stopped
     networks:
       - sniper-net
@@ -23,7 +22,7 @@ services:
       - redis
     volumes:
       - ./logs:/usr/src/app/logs
-      - ./shared:/shared
+      - ./shared:/usr/src/app/shared
     restart: unless-stopped
     networks:
       - sniper-net
@@ -38,7 +37,7 @@ services:
       - redis
     volumes:
       - ./logs:/usr/src/app/logs
-      - ./shared:/shared
+      - ./shared:/usr/src/app/shared
     restart: unless-stopped
     networks:
       - sniper-net
@@ -53,7 +52,7 @@ services:
       - redis
     volumes:
       - ./logs:/usr/src/app/logs
-      - ./shared:/shared
+      - ./shared:/usr/src/app/shared
     restart: unless-stopped
     networks:
       - sniper-net
@@ -68,7 +67,24 @@ services:
       - redis
     volumes:
       - ./logs:/usr/src/app/logs
-      - ./shared:/shared
+      - ./shared:/usr/src/app/shared
+    restart: unless-stopped
+    networks:
+      - sniper-net
+      
+  api-server:
+    build:
+      context: ./services/api-server
+    container_name: api_server_sniper
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+    depends_on:
+      - redis
+    volumes:
+      - ./logs:/usr/src/app/logs
+      - ./shared:/usr/src/app/shared
     restart: unless-stopped
     networks:
       - sniper-net

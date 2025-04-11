@@ -18,7 +18,7 @@ const {
   getAccount,
   TOKEN_PROGRAM_ID 
 } = require('@solana/spl-token');
-const { getConnection } = require('./shared/connection');
+const { getConnection } = require('/usr/src/app/shared/connection');
 const { loadWallet } = require('./shared/wallet');
 const { createLogger, createTransactionLogger } = require('./shared/logger');
 const config = require('./shared/config');

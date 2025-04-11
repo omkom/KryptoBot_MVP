@@ -6,7 +6,7 @@
 
 const Redis = require('ioredis');
 const { Connection, PublicKey } = require('@solana/web3.js');
-const { createLogger } = require('../../../shared/logger');
+const { createLogger } = require('/usr/src/app/shared/logger');
 const config = require('../../../shared/config').default;
 const { REDIS_CHANNELS, SOLANA_ADDRESSES } = require('../../../shared/constants');
 const { getConnection } = require('../../../shared/connection');

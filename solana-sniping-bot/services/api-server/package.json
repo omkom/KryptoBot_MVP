@@ -1,12 +1,23 @@
+// services/api-server/package.json
 {
   "name": "api-server",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "src/index.js",
   "scripts": {
+    "start": "node src/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": ""
+  "description": "Solana Memecoin Bot - API Server",
+  "dependencies": {
+    "@solana/web3.js": "^1.73.0",
+    "chalk": "^4.1.2",
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2",
+    "ioredis": "^5.2.5",
+    "socket.io": "^4.6.1",
+    "winston": "^3.8.2"
+  }
 }

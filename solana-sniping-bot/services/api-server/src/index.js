@@ -9,7 +9,7 @@ const socketIo = require('socket.io');
 const Redis = require('ioredis');
 const fs = require('fs');
 const path = require('path');
-const { createLogger } = require('../../../shared/logger');
+const { createLogger } = require('/usr/src/app/shared/logger');
 const config = require('../../../shared/config').default;
 const { REDIS_CHANNELS } = require('../../../shared/constants');
 
