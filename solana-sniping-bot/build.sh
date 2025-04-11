@@ -24,8 +24,40 @@ if ! command -v docker compose &> /dev/null; then
 fi
 
 # Create necessary directories
-echo -e "${YELLOW}Creating log directories...${NC}"
-mkdir -p logs/errors logs/transactions
+echo -e "${YELLOW}Creating directory structure...${NC}"
+mkdir -p logs/errors logs/transactions shared/utils
+
+# Ensure all required source files exist
+echo -e "${YELLOW}Checking required files...${NC}"
+if [ ! -f "shared/package.json" ]; then
+    echo -e "${RED}shared/package.json is missing. Please create it first.${NC}"
+    exit 1
+fi
+
+if [ ! -f "shared/config.js" ]; then
+    echo -e "${RED}shared/config.js is missing.${NC}"
+    exit 1
+fi
+
+if [ ! -f "shared/constants.js" ]; then
+    echo -e "${RED}shared/constants.js is missing.${NC}"
+    exit 1
+fi
+
+if [ ! -f "shared/logger.js" ]; then
+    echo -e "${RED}shared/logger.js is missing.${NC}"
+    exit 1
+fi
+
+if [ ! -f "shared/connection.js" ]; then
+    echo -e "${RED}shared/connection.js is missing.${NC}"
+    exit 1
+fi
+
+if [ ! -f "shared/wallet.js" ]; then
+    echo -e "${RED}shared/wallet.js is missing.${NC}"
+    exit 1
+fi
 
 # Check if .env file exists
 if [ ! -f .env ]; then
@@ -34,7 +66,6 @@ if [ ! -f .env ]; then
         cp .env.example .env
         echo -e "${YELLOW}Please edit .env file with your configuration before starting the bot.${NC}"
         echo -e "${YELLOW}Most importantly, set your WALLET_SECRET_KEY.${NC}"
-        exit 1
     else
         echo -e "${RED}.env.example not found. Please create a .env file manually.${NC}"
         exit 1

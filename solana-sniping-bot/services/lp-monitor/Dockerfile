@@ -1,12 +1,15 @@
 # Service-specific Dockerfile
-# Example: services/lp-monitor/Dockerfile
+# This is a template for all service Dockerfiles
 ARG NODE_VERSION=18
 
 # Extend from the base image
 FROM solana-bot-base:${NODE_VERSION} AS service-base
 
 # Set service name for reference
-ARG SERVICE_NAME
+ARG SERVICE_NAME=undefined
+
+# Create service directory structure
+RUN mkdir -p ./service/src
 
 # Copy service package files
 COPY ./services/${SERVICE_NAME}/package*.json ./service/

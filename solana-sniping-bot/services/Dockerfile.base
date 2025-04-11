@@ -10,11 +10,14 @@ RUN apk add --no-cache \
     tzdata \
     curl
 
+# Create shared directory structure first
+RUN mkdir -p /usr/src/app/shared
+
 # Add production dependencies stage
 FROM base AS deps
 
 # Copy package files for the shared modules
-COPY ./shared/package*.json ./shared/
+COPY ./shared/package.json ./shared/
 
 # Install shared dependencies
 RUN cd ./shared && npm install --only=production
