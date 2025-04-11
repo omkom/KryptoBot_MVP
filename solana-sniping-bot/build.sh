@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Solana Memecoin Sniping Bot Setup and Start Script
-# This script will prepare the environment and start the bot in detached mode
+# Build script for the Solana Memecoin Sniping Bot
+set -e
 
 # Color definitions
 GREEN='\033[0;32m'
@@ -9,7 +9,7 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-echo -e "${GREEN}=== Solana Memecoin Sniping Bot Setup ===${NC}"
+echo -e "${GREEN}=== Building Solana Memecoin Sniping Bot ===${NC}"
 
 # Check if Docker is installed
 if ! command -v docker &> /dev/null; then
@@ -41,19 +41,13 @@ if [ ! -f .env ]; then
     fi
 fi
 
-# Build Docker images
-echo -e "${YELLOW}Building Docker images...${NC}"
+# Build base image first
+echo -e "${YELLOW}Building base Docker image...${NC}"
+docker compose build base-image
+
+# Build service images
+echo -e "${YELLOW}Building service images...${NC}"
 docker compose build
 
-# Start in detached mode
-echo -e "${YELLOW}Starting services in detached mode...${NC}"
-docker compose up -d
-
-# Check if services are running
-echo -e "${YELLOW}Checking service status...${NC}"
-docker compose ps
-
-echo -e "${GREEN}Setup complete! The bot is now running in the background.${NC}"
-echo -e "${YELLOW}You can monitor logs with: docker-compose logs -f${NC}"
-echo -e "${YELLOW}You can stop the bot with: docker-compose down${NC}"
-echo -e "${YELLOW}API server is accessible at: http://localhost:3000${NC}"
+echo -e "${GREEN}Build complete! You can now start the bot with:${NC}"
+echo -e "${YELLOW}docker compose up -d${NC}"

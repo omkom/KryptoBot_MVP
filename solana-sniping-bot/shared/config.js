@@ -69,4 +69,5 @@ const config = validateConfig({
   SIMULATE_TRANSACTIONS: process.env.SIMULATE_TRANSACTIONS === 'true',
 });
 
-export default config;
+// Use CommonJS exports instead of ES modules
+module.exports = config;

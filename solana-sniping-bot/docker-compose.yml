@@ -1,9 +1,35 @@
 version: '3.8'
 
+x-service-base: &service-base
+  restart: unless-stopped
+  networks:
+    - sniper-net
+  volumes:
+    - ./logs:/usr/src/app/logs
+  env_file:
+    - .env
+  depends_on:
+    - redis
+  deploy:
+    resources:
+      limits:
+        memory: 512M
+
 services:
+  # Build the base image first
+  base-image:
+    image: solana-bot-base:18
+    build:
+      context: .
+      dockerfile: services/Dockerfile.base
+      target: prod
+    deploy:
+      replicas: 0
+
   redis:
     image: redis:7-alpine
     container_name: redis_sniper
+    command: redis-server --appendonly yes
     ports:
       - "6379:6379"
     volumes:
@@ -11,83 +37,88 @@ services:
     restart: unless-stopped
     networks:
       - sniper-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   lp-monitor:
-    build:
-      context: ./services/lp-monitor
+    <<: *service-base
     container_name: lp_monitor_sniper
-    env_file:
-      - .env
+    build:
+      context: .
+      dockerfile: services/lp-monitor/Dockerfile
+      args:
+        - SERVICE_NAME=lp-monitor
+        - NODE_VERSION=18
     depends_on:
-      - redis
-    volumes:
-      - ./logs:/usr/src/app/logs
-      - ./shared:/usr/src/app/shared
-    restart: unless-stopped
-    networks:
-      - sniper-net
+      base-image:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
 
   token-filter:
-    build:
-      context: ./services/token-filter
+    <<: *service-base
     container_name: token_filter_sniper
-    env_file:
-      - .env
+    build:
+      context: .
+      dockerfile: services/token-filter/Dockerfile
+      args:
+        - SERVICE_NAME=token-filter
+        - NODE_VERSION=18
     depends_on:
-      - redis
-    volumes:
-      - ./logs:/usr/src/app/logs
-      - ./shared:/usr/src/app/shared
-    restart: unless-stopped
-    networks:
-      - sniper-net
+      base-image:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
 
   buy-executor:
-    build:
-      context: ./services/buy-executor
+    <<: *service-base
     container_name: buy_executor_sniper
-    env_file:
-      - .env
+    build:
+      context: .
+      dockerfile: services/buy-executor/Dockerfile
+      args:
+        - SERVICE_NAME=buy-executor
+        - NODE_VERSION=18
     depends_on:
-      - redis
-    volumes:
-      - ./logs:/usr/src/app/logs
-      - ./shared:/usr/src/app/shared
-    restart: unless-stopped
-    networks:
-      - sniper-net
+      base-image:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
 
   sell-manager:
-    build:
-      context: ./services/sell-manager
+    <<: *service-base
     container_name: sell_manager_sniper
-    env_file:
-      - .env
+    build:
+      context: .
+      dockerfile: services/sell-manager/Dockerfile
+      args:
+        - SERVICE_NAME=sell-manager
+        - NODE_VERSION=18
     depends_on:
-      - redis
-    volumes:
-      - ./logs:/usr/src/app/logs
-      - ./shared:/usr/src/app/shared
-    restart: unless-stopped
-    networks:
-      - sniper-net
+      base-image:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
       
   api-server:
-    build:
-      context: ./services/api-server
+    <<: *service-base
     container_name: api_server_sniper
-    env_file:
-      - .env
+    build:
+      context: .
+      dockerfile: services/api-server/Dockerfile
+      args:
+        - SERVICE_NAME=api-server
+        - NODE_VERSION=18
     ports:
       - "3000:3000"
     depends_on:
-      - redis
-    volumes:
-      - ./logs:/usr/src/app/logs
-      - ./shared:/usr/src/app/shared
-    restart: unless-stopped
-    networks:
-      - sniper-net
+      base-image:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
 
 networks:
   sniper-net:
@@ -95,3 +126,4 @@ networks:
 
 volumes:
   redis_data:
+    driver: local
