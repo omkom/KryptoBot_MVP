@@ -1,4 +1,4 @@
-# Service-specific Dockerfile for buy-executor
+# Simplified Dockerfile for buy-executor
 ARG NODE_VERSION=18
 
 FROM node:${NODE_VERSION}-alpine
@@ -31,9 +31,5 @@ ENV SERVICE=buy-executor \
     NODE_ENV=production \
     NODE_PATH=/usr/src/app
 
-# Create debug script to check environment
-RUN echo '#!/bin/sh\necho "Service: buy-executor"\necho "Service directories:"\nls -la /usr/src/app\necho "\nShared modules:"\nls -la /usr/src/app/shared\necho "\nService files:"\nls -la /usr/src/app/service/src\necho "\nStarting service..."\nnode /usr/src/app/service/src/index.js' > /usr/src/app/start.sh && \
-    chmod +x /usr/src/app/start.sh
-
-# Command to run the service
-CMD ["/usr/src/app/start.sh"]
+# Command to run the service directly
+CMD ["node", "service/src/index.js"]
