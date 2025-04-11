@@ -1,14 +1,4 @@
 services:
-  # Build the base image first
-  base-image:
-    image: solana-bot-base:18
-    build:
-      context: .
-      dockerfile: services/Dockerfile.base
-      target: prod
-    deploy:
-      replicas: 0
-
   redis:
     image: redis:7-alpine
     container_name: redis_sniper
@@ -27,24 +17,23 @@ services:
       retries: 3
 
   lp-monitor:
+    build:
+      context: .
+      dockerfile: services/Dockerfile
+      args:
+        - SERVICE_NAME=lp-monitor
+        - NODE_VERSION=18
+    container_name: lp_monitor_sniper
     restart: unless-stopped
     networks:
       - sniper-net
     volumes:
       - ./logs:/usr/src/app/logs
-      - ./shared:/usr/src/app/shared
     env_file:
       - .env
-    container_name: lp_monitor_sniper
-    build:
-      context: .
-      dockerfile: services/lp-monitor/Dockerfile
-      args:
-        - SERVICE_NAME=lp-monitor
-        - NODE_VERSION=18
+    environment:
+      - NODE_PATH=/usr/src/app
     depends_on:
-      base-image:
-        condition: service_completed_successfully
       redis:
         condition: service_healthy
     deploy:
@@ -53,24 +42,23 @@ services:
           memory: 512M
 
   token-filter:
+    build:
+      context: .
+      dockerfile: services/Dockerfile
+      args:
+        - SERVICE_NAME=token-filter
+        - NODE_VERSION=18
+    container_name: token_filter_sniper
     restart: unless-stopped
     networks:
       - sniper-net
     volumes:
       - ./logs:/usr/src/app/logs
-      - ./shared:/usr/src/app/shared
     env_file:
       - .env
-    container_name: token_filter_sniper
-    build:
-      context: .
-      dockerfile: services/token-filter/Dockerfile
-      args:
-        - SERVICE_NAME=token-filter
-        - NODE_VERSION=18
+    environment:
+      - NODE_PATH=/usr/src/app
     depends_on:
-      base-image:
-        condition: service_completed_successfully
       redis:
         condition: service_healthy
     deploy:
@@ -79,24 +67,23 @@ services:
           memory: 512M
 
   buy-executor:
+    build:
+      context: .
+      dockerfile: services/Dockerfile
+      args:
+        - SERVICE_NAME=buy-executor
+        - NODE_VERSION=18
+    container_name: buy_executor_sniper
     restart: unless-stopped
     networks:
       - sniper-net
     volumes:
       - ./logs:/usr/src/app/logs
-      - ./shared:/usr/src/app/shared
     env_file:
       - .env
-    container_name: buy_executor_sniper
-    build:
-      context: .
-      dockerfile: services/buy-executor/Dockerfile
-      args:
-        - SERVICE_NAME=buy-executor
-        - NODE_VERSION=18
+    environment:
+      - NODE_PATH=/usr/src/app
     depends_on:
-      base-image:
-        condition: service_completed_successfully
       redis:
         condition: service_healthy
     deploy:
@@ -105,24 +92,23 @@ services:
           memory: 512M
 
   sell-manager:
+    build:
+      context: .
+      dockerfile: services/Dockerfile
+      args:
+        - SERVICE_NAME=sell-manager
+        - NODE_VERSION=18
+    container_name: sell_manager_sniper
     restart: unless-stopped
     networks:
       - sniper-net
     volumes:
       - ./logs:/usr/src/app/logs
-      - ./shared:/usr/src/app/shared
     env_file:
       - .env
-    container_name: sell_manager_sniper
-    build:
-      context: .
-      dockerfile: services/sell-manager/Dockerfile
-      args:
-        - SERVICE_NAME=sell-manager
-        - NODE_VERSION=18
+    environment:
+      - NODE_PATH=/usr/src/app
     depends_on:
-      base-image:
-        condition: service_completed_successfully
       redis:
         condition: service_healthy
     deploy:
@@ -131,26 +117,25 @@ services:
           memory: 512M
       
   api-server:
+    build:
+      context: .
+      dockerfile: services/Dockerfile
+      args:
+        - SERVICE_NAME=api-server
+        - NODE_VERSION=18
+    container_name: api_server_sniper
     restart: unless-stopped
     networks:
       - sniper-net
     volumes:
       - ./logs:/usr/src/app/logs
-      - ./shared:/usr/src/app/shared
     env_file:
       - .env
-    container_name: api_server_sniper
-    build:
-      context: .
-      dockerfile: services/api-server/Dockerfile
-      args:
-        - SERVICE_NAME=api-server
-        - NODE_VERSION=18
+    environment:
+      - NODE_PATH=/usr/src/app
     ports:
       - "3000:3000"
     depends_on:
-      base-image:
-        condition: service_completed_successfully
       redis:
         condition: service_healthy
     deploy:

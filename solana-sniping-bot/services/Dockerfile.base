@@ -16,7 +16,7 @@ RUN mkdir -p ./shared ./service/src ./logs/errors ./logs/transactions
 FROM base AS deps
 
 # Copy package files for the shared modules
-COPY ./shared/package.json ./shared/
+COPY ../shared/package.json ./shared/
 
 # Install shared dependencies
 WORKDIR /usr/src/app/shared
@@ -32,13 +32,13 @@ RUN npm install
 WORKDIR /usr/src/app
 
 # Copy shared code for development
-COPY ./shared ./shared/
+COPY ../shared ./shared/
 
 # Production stage
 FROM deps AS prod
 
 # Copy shared code
-COPY ./shared ./shared/
+COPY ../shared ./shared/
 
 # Set up NODE_PATH to allow easier imports
 ENV NODE_PATH=/usr/src/app

@@ -9,7 +9,13 @@ const { format, transports, createLogger } = winston;
 const chalk = require('chalk');
 const fs = require('fs');
 const path = require('path');
-const config = require('./config').default;
+
+// Load config directly from process.env instead of requiring config.js
+// This avoids circular dependency issues
+const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
+const DEBUG = process.env.DEBUG === 'true';
+const LOG_FILE_MAX_SIZE = parseInt(process.env.LOG_FILE_MAX_SIZE || '10485760', 10); // 10MB
+const LOG_MAX_FILES = parseInt(process.env.LOG_MAX_FILES || '5', 10);
 
 // Ensure logs directory exists
 const logsDir = path.join(process.cwd(), 'logs');
@@ -66,7 +72,7 @@ const consoleFormat = format.printf(({ timestamp, level, message, context, ...re
 function createContextLogger(context) {
   // Base logger configuration
   const logger = createLogger({
-    level: config.LOG_LEVEL,
+    level: LOG_LEVEL,
     format: format.combine(
       format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),
       format.metadata({ fillExcept: ['message', 'level', 'timestamp', 'label'] }),
@@ -76,7 +82,7 @@ function createContextLogger(context) {
     transports: [
       // Always log to console in JSON format (for Docker)
       new transports.Console({
-        format: config.DEBUG
+        format: DEBUG
           ? format.combine(format.timestamp({ format: 'HH:mm:ss.SSS' }), consoleFormat)
           : format.combine(format.timestamp(), format.json())
       }),
@@ -84,8 +90,8 @@ function createContextLogger(context) {
       // Main rotating file transport
       new transports.File({
         filename: path.join(logsDir, `${context}.log`),
-        maxsize: config.LOG_FILE_MAX_SIZE,
-        maxFiles: config.LOG_MAX_FILES,
+        maxsize: LOG_FILE_MAX_SIZE,
+        maxFiles: LOG_MAX_FILES,
         tailable: true
       }),
       
@@ -93,8 +99,8 @@ function createContextLogger(context) {
       new transports.File({
         filename: path.join(errorLogsDir, `${context}-error.log`),
         level: 'error',
-        maxsize: config.LOG_FILE_MAX_SIZE,
-        maxFiles: config.LOG_MAX_FILES
+        maxsize: LOG_FILE_MAX_SIZE,
+        maxFiles: LOG_MAX_FILES
       })
     ]
   });
@@ -118,7 +124,7 @@ function createTransactionLogger(context) {
     transports: [
       // Console with specialized format for transactions
       new transports.Console({
-        format: config.DEBUG
+        format: DEBUG
           ? format.combine(
               format.timestamp({ format: 'HH:mm:ss.SSS' }),
               format.printf(({ timestamp, level, message, signature, ...rest }) => {
@@ -141,13 +147,14 @@ function createTransactionLogger(context) {
       // Transaction-specific file
       new transports.File({
         filename: path.join(transactionLogsDir, `${context}-transactions.log`),
-        maxsize: config.LOG_FILE_MAX_SIZE,
-        maxFiles: config.LOG_MAX_FILES
+        maxsize: LOG_FILE_MAX_SIZE,
+        maxFiles: LOG_MAX_FILES
       })
     ]
   });
 }
 
+// Export the functions
 module.exports = {
   createLogger: createContextLogger,
   createTransactionLogger

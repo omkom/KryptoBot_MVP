@@ -1,31 +1,6 @@
 # Service-specific Dockerfile
-# Template for services/[service-name]/Dockerfile
 ARG NODE_VERSION=18
-
-# Extend from the base image
-FROM solana-bot-base:${NODE_VERSION} AS base
-
-# Set service name for reference
-ARG SERVICE_NAME=undefined
-
-# Copy service package files
-COPY ./services/${SERVICE_NAME}/package*.json ./service/
-
-# Install service dependencies
-WORKDIR /usr/src/app/service
-RUN npm install --only=production
-WORKDIR /usr/src/app
-
-# Copy service code
-COPY ./services/${SERVICE_NAME}/src ./service/src/
-
-# Set any service-specific environment variables
-ENV SERVICE=${SERVICE_NAME} \
-    NODE_ENV=production
-# Template Dockerfile for all services
-# Copy this to each service directory and replace SERVICE_NAME
-
-ARG NODE_VERSION=18
+ARG SERVICE_NAME
 
 FROM node:${NODE_VERSION}-alpine
 
@@ -42,7 +17,7 @@ RUN mkdir -p ./shared ./service/src ./logs/errors ./logs/transactions
 COPY ./shared /usr/src/app/shared/
 
 # Copy service package files
-COPY ./services/SERVICE_NAME/package*.json ./service/
+COPY ./services/${SERVICE_NAME}/package*.json ./service/
 
 # Install service dependencies
 WORKDIR /usr/src/app/service
@@ -50,10 +25,10 @@ RUN npm install --only=production
 WORKDIR /usr/src/app
 
 # Copy service code
-COPY ./services/SERVICE_NAME/src ./service/src/
+COPY ./services/${SERVICE_NAME}/src ./service/src/
 
 # Set environment variables
-ENV SERVICE=SERVICE_NAME \
+ENV SERVICE=${SERVICE_NAME} \
     NODE_ENV=production \
     NODE_PATH=/usr/src/app
 
@@ -63,5 +38,3 @@ RUN echo '#!/bin/sh\necho "Service directories:"\nls -la /usr/src/app\necho "\nS
 
 # Command to run the service
 CMD ["/usr/src/app/start.sh"]
-# Command to run the service
-CMD ["node", "service/src/index.js"]

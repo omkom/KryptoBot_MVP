@@ -4,6 +4,7 @@
  * Includes DryRun mode configuration
  */
 
+// NOTE: Don't require logger.js here to avoid circular dependencies
 require('dotenv').config();
 
 // Utility for validation
@@ -69,5 +70,5 @@ const config = validateConfig({
   SIMULATE_TRANSACTIONS: process.env.SIMULATE_TRANSACTIONS === 'true',
 });
 
-// Use CommonJS exports instead of ES modules
-module.exports = config;
+// Export as default to match the import pattern used in the code
+exports.default = config;
