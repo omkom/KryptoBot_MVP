@@ -1,7 +1,5 @@
 # Simplified Dockerfile for token-filter
-ARG NODE_VERSION=18
-
-FROM node:${NODE_VERSION}-alpine
+FROM node:18-alpine
 
 # Set working directory
 WORKDIR /usr/src/app
@@ -10,7 +8,7 @@ WORKDIR /usr/src/app
 RUN apk add --no-cache tzdata curl
 
 # Create necessary directories
-RUN mkdir -p ./shared ./service/src ./logs/errors ./logs/transactions
+RUN mkdir -p ./logs/errors ./logs/transactions
 
 # Copy shared module files
 COPY ./shared /usr/src/app/shared/

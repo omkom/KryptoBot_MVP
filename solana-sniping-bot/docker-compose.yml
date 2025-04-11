@@ -19,10 +19,7 @@ services:
   lp-monitor:
     build:
       context: .
-      dockerfile: services/Dockerfile
-      args:
-        SERVICE_NAME: lp-monitor
-        NODE_VERSION: 18
+      dockerfile: services/lp-monitor/Dockerfile
     container_name: lp_monitor_sniper
     restart: unless-stopped
     networks:
@@ -45,8 +42,6 @@ services:
     build:
       context: .
       dockerfile: services/token-filter/Dockerfile
-      args:
-        NODE_VERSION: 18
     container_name: token_filter_sniper
     restart: unless-stopped
     networks:
@@ -69,8 +64,6 @@ services:
     build:
       context: .
       dockerfile: services/buy-executor/Dockerfile
-      args:
-        NODE_VERSION: 18
     container_name: buy_executor_sniper
     restart: unless-stopped
     networks:
@@ -93,8 +86,6 @@ services:
     build:
       context: .
       dockerfile: services/sell-manager/Dockerfile
-      args:
-        NODE_VERSION: 18
     container_name: sell_manager_sniper
     restart: unless-stopped
     networks:
@@ -117,8 +108,6 @@ services:
     build:
       context: .
       dockerfile: services/api-server/Dockerfile
-      args:
-        NODE_VERSION: 18
     container_name: api_server_sniper
     restart: unless-stopped
     networks:
