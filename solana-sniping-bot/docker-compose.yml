@@ -44,9 +44,8 @@ services:
   token-filter:
     build:
       context: .
-      dockerfile: services/Dockerfile
+      dockerfile: services/token-filter/Dockerfile
       args:
-        SERVICE_NAME: token-filter
         NODE_VERSION: 18
     container_name: token_filter_sniper
     restart: unless-stopped
@@ -69,9 +68,8 @@ services:
   buy-executor:
     build:
       context: .
-      dockerfile: services/Dockerfile
+      dockerfile: services/buy-executor/Dockerfile
       args:
-        SERVICE_NAME: buy-executor
         NODE_VERSION: 18
     container_name: buy_executor_sniper
     restart: unless-stopped
@@ -94,9 +92,8 @@ services:
   sell-manager:
     build:
       context: .
-      dockerfile: services/Dockerfile
+      dockerfile: services/sell-manager/Dockerfile
       args:
-        SERVICE_NAME: sell-manager
         NODE_VERSION: 18
     container_name: sell_manager_sniper
     restart: unless-stopped
@@ -119,9 +116,8 @@ services:
   api-server:
     build:
       context: .
-      dockerfile: services/Dockerfile
+      dockerfile: services/api-server/Dockerfile
       args:
-        SERVICE_NAME: api-server
         NODE_VERSION: 18
     container_name: api_server_sniper
     restart: unless-stopped

@@ -1,6 +1,5 @@
-# Service-specific Dockerfile
+# Base Dockerfile for all services
 ARG NODE_VERSION=18
-ARG SERVICE_NAME
 
 FROM node:${NODE_VERSION}-alpine
 
@@ -17,6 +16,7 @@ RUN mkdir -p ./shared ./service/src ./logs/errors ./logs/transactions
 COPY ./shared /usr/src/app/shared/
 
 # Copy service package files
+ARG SERVICE_NAME
 COPY ./services/${SERVICE_NAME}/package*.json ./service/
 
 # Install service dependencies
@@ -33,7 +33,7 @@ ENV SERVICE=${SERVICE_NAME} \
     NODE_PATH=/usr/src/app
 
 # Create debug script to check environment
-RUN echo '#!/bin/sh\necho "Service directories:"\nls -la /usr/src/app\necho "\nShared modules:"\nls -la /usr/src/app/shared\necho "\nService files:"\nls -la /usr/src/app/service/src\necho "\nStarting service..."\nnode /usr/src/app/service/src/index.js' > /usr/src/app/start.sh && \
+RUN echo '#!/bin/sh\necho "Service: ${SERVICE_NAME}"\necho "Service directories:"\nls -la /usr/src/app\necho "\nShared modules:"\nls -la /usr/src/app/shared\necho "\nService files:"\nls -la /usr/src/app/service/src\necho "\nNode path:"\necho $NODE_PATH\necho "\nStarting service..."\nnode /usr/src/app/service/src/index.js' > /usr/src/app/start.sh && \
     chmod +x /usr/src/app/start.sh
 
 # Command to run the service
