@@ -1,7 +1,6 @@
 /**
  * Debug script to help diagnose Node.js module resolution issues
- * Save this file and run it in your container with:
- * docker compose exec lp_monitor_sniper node /usr/src/app/debugModules.js
+ * Run with: docker compose exec lp-monitor node /usr/src/app/debugModules.js
  */
 
 const fs = require('fs');
@@ -59,12 +58,10 @@ testRequire('shared/config');
 testRequire('shared/constants');
 testRequire('shared/connection');
 testRequire('shared/wallet');
-testRequire('/usr/src/app/shared/logger');
 
 console.log('\nTesting relative imports:');
 testRequire('../shared/logger');
 testRequire('./shared/logger');
-testRequire('./shared/config');
 
 console.log('\nTesting npm dependencies:');
 testRequire('ioredis');
@@ -96,23 +93,5 @@ console.log('\nChecking shared module files:');
 checkFileContent('/usr/src/app/shared/logger.js');
 checkFileContent('/usr/src/app/shared/config.js');
 checkFileContent('/usr/src/app/shared/constants.js');
-
-console.log('\n=== Package.json Check ===');
-function checkPackageJson(filePath) {
-  try {
-    const content = fs.readFileSync(filePath, 'utf8');
-    const pkg = JSON.parse(content);
-    console.log(`✅ ${filePath} is valid JSON`);
-    console.log(`   Name: ${pkg.name}`);
-    console.log(`   Dependencies: ${Object.keys(pkg.dependencies || {}).length}`);
-    return true;
-  } catch (error) {
-    console.log(`❌ Error parsing ${filePath}: ${error.message}`);
-    return false;
-  }
-}
-
-checkPackageJson('/usr/src/app/shared/package.json');
-checkPackageJson('/usr/src/app/service/package.json');
 
 console.log('\n=== Complete ===');

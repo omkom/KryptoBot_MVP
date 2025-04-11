@@ -21,8 +21,8 @@ services:
       context: .
       dockerfile: services/Dockerfile
       args:
-        - SERVICE_NAME=lp-monitor
-        - NODE_VERSION=18
+        SERVICE_NAME: lp-monitor
+        NODE_VERSION: 18
     container_name: lp_monitor_sniper
     restart: unless-stopped
     networks:
@@ -46,8 +46,8 @@ services:
       context: .
       dockerfile: services/Dockerfile
       args:
-        - SERVICE_NAME=token-filter
-        - NODE_VERSION=18
+        SERVICE_NAME: token-filter
+        NODE_VERSION: 18
     container_name: token_filter_sniper
     restart: unless-stopped
     networks:
@@ -71,8 +71,8 @@ services:
       context: .
       dockerfile: services/Dockerfile
       args:
-        - SERVICE_NAME=buy-executor
-        - NODE_VERSION=18
+        SERVICE_NAME: buy-executor
+        NODE_VERSION: 18
     container_name: buy_executor_sniper
     restart: unless-stopped
     networks:
@@ -96,8 +96,8 @@ services:
       context: .
       dockerfile: services/Dockerfile
       args:
-        - SERVICE_NAME=sell-manager
-        - NODE_VERSION=18
+        SERVICE_NAME: sell-manager
+        NODE_VERSION: 18
     container_name: sell_manager_sniper
     restart: unless-stopped
     networks:
@@ -121,8 +121,8 @@ services:
       context: .
       dockerfile: services/Dockerfile
       args:
-        - SERVICE_NAME=api-server
-        - NODE_VERSION=18
+        SERVICE_NAME: api-server
+        NODE_VERSION: 18
     container_name: api_server_sniper
     restart: unless-stopped
     networks:
@@ -133,6 +133,7 @@ services:
       - .env
     environment:
       - NODE_PATH=/usr/src/app
+      - API_SERVER_PORT=3000
     ports:
       - "3000:3000"
     depends_on:
