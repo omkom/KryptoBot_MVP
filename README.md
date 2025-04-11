@@ -1,1 +1,0 @@
-# KryptoBot_MVP
