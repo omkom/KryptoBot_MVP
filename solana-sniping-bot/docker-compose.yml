@@ -1,0 +1,81 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: redis_sniper
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./shared:/shared
+    restart: unless-stopped
+    networks:
+      - sniper-net
+
+  lp-monitor:
+    build:
+      context: ./services/lp-monitor
+    container_name: lp_monitor_sniper
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    volumes:
+      - ./logs:/usr/src/app/logs
+      - ./shared:/shared
+    restart: unless-stopped
+    networks:
+      - sniper-net
+
+  token-filter:
+    build:
+      context: ./services/token-filter
+    container_name: token_filter_sniper
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    volumes:
+      - ./logs:/usr/src/app/logs
+      - ./shared:/shared
+    restart: unless-stopped
+    networks:
+      - sniper-net
+
+  buy-executor:
+    build:
+      context: ./services/buy-executor
+    container_name: buy_executor_sniper
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    volumes:
+      - ./logs:/usr/src/app/logs
+      - ./shared:/shared
+    restart: unless-stopped
+    networks:
+      - sniper-net
+
+  sell-manager:
+    build:
+      context: ./services/sell-manager
+    container_name: sell_manager_sniper
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    volumes:
+      - ./logs:/usr/src/app/logs
+      - ./shared:/shared
+    restart: unless-stopped
+    networks:
+      - sniper-net
+
+networks:
+  sniper-net:
+    driver: bridge
+
+volumes:
+  redis_data:
