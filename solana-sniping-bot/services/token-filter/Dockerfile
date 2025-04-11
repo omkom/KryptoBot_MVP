@@ -1,24 +1,20 @@
 # Service-specific Dockerfile
-# This is a template for all service Dockerfiles
+# Template for services/[service-name]/Dockerfile
 ARG NODE_VERSION=18
 
 # Extend from the base image
-FROM solana-bot-base:${NODE_VERSION} AS service-base
+FROM solana-bot-base:${NODE_VERSION} AS base
 
 # Set service name for reference
 ARG SERVICE_NAME=undefined
-
-# Create service directory structure
-RUN mkdir -p ./service/src
 
 # Copy service package files
 COPY ./services/${SERVICE_NAME}/package*.json ./service/
 
 # Install service dependencies
-RUN cd ./service && npm install --only=production
-
-# Final service image
-FROM service-base AS service
+WORKDIR /usr/src/app/service
+RUN npm install --only=production
+WORKDIR /usr/src/app
 
 # Copy service code
 COPY ./services/${SERVICE_NAME}/src ./service/src/
@@ -27,7 +23,5 @@ COPY ./services/${SERVICE_NAME}/src ./service/src/
 ENV SERVICE=${SERVICE_NAME} \
     NODE_ENV=production
 
-# Service-specific health check can be overridden here if needed
-
-# Command can be overridden for service-specific needs
+# Command to run the service
 CMD ["node", "service/src/index.js"]

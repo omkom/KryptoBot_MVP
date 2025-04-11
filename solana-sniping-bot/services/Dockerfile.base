@@ -1,5 +1,4 @@
 # Base Dockerfile for all services
-# services/Dockerfile.base
 FROM node:18-alpine AS base
 
 # Set working directory
@@ -10,8 +9,8 @@ RUN apk add --no-cache \
     tzdata \
     curl
 
-# Create shared directory structure first
-RUN mkdir -p /usr/src/app/shared
+# Create directories
+RUN mkdir -p ./shared ./service/src ./logs/errors ./logs/transactions
 
 # Add production dependencies stage
 FROM base AS deps
@@ -20,13 +19,17 @@ FROM base AS deps
 COPY ./shared/package.json ./shared/
 
 # Install shared dependencies
-RUN cd ./shared && npm install --only=production
+WORKDIR /usr/src/app/shared
+RUN npm install --only=production
+WORKDIR /usr/src/app
 
-# Development stage with all dependencies (can be used for testing)
+# Development stage with all dependencies
 FROM deps AS dev
 
 # Install development dependencies for shared
-RUN cd ./shared && npm install
+WORKDIR /usr/src/app/shared
+RUN npm install
+WORKDIR /usr/src/app
 
 # Copy shared code for development
 COPY ./shared ./shared/
@@ -37,9 +40,9 @@ FROM deps AS prod
 # Copy shared code
 COPY ./shared ./shared/
 
+# Set up NODE_PATH to allow easier imports
+ENV NODE_PATH=/usr/src/app
+
 # Add a health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:${PORT:-3000}/health || exit 1
-
-# Set default command
-CMD ["node", "service/index.js"]
