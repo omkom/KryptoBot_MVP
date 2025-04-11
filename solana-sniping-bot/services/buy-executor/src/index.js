@@ -2,6 +2,7 @@
  * @fileoverview Buy Executor Service for Solana Memecoin Sniping Bot
  * Subscribes to potential buy opportunities from Redis, constructs and executes
  * swap transactions with high priority fees and custom slippage settings.
+ * Includes DryRun mode for transaction simulation.
  */
 
 const Redis = require('ioredis');
@@ -23,6 +24,7 @@ const { loadWallet } = require('../../../shared/wallet');
 const { createLogger, createTransactionLogger } = require('../../../shared/logger');
 const config = require('../../../shared/config');
 const { REDIS_CHANNELS, SOLANA_ADDRESSES } = require('../../../shared/constants');
+const { v4: uuidv4 } = require('uuid');
 
 // Initialize loggers
 const logger = createLogger('buy-executor');
@@ -55,6 +57,16 @@ function createTransactionId() {
 }
 
 /**
+ * Generates a simulated transaction signature for DryRun mode
+ * @returns {string} Simulated transaction signature
+ */
+function generateSimulatedSignature() {
+  // Generate a unique signature-like string for tracking
+  const randomBytes = uuidv4().replace(/-/g, '');
+  return randomBytes + 'DryRunSim';
+}
+
+/**
  * Checks if the Associated Token Account exists for a given mint
  * If not, creates an instruction to create it
  * @param {Connection} connection - Solana connection
@@ -63,6 +75,42 @@ function createTransactionId() {
  * @returns {Promise<{exists: boolean, address: PublicKey, createInstruction: TransactionInstruction|null}>}
  */
 async function checkAndCreateATA(connection, ownerPubkey, mintPubkey) {
+  // In DryRun mode, simulate the ATA check
+  if (config.DRY_RUN) {
+    const ataAddress = await getAssociatedTokenAddress(
+      mintPubkey,
+      ownerPubkey,
+      false
+    );
+    
+    // Simulate a 70% chance the ATA already exists
+    const exists = Math.random() > 0.3;
+    
+    logger.debug(`DryRun: Simulating ATA check for ${mintPubkey.toString()}, exists=${exists}`);
+    
+    if (exists) {
+      return {
+        exists: true,
+        address: ataAddress,
+        createInstruction: null
+      };
+    } else {
+      const createInstruction = createAssociatedTokenAccountInstruction(
+        ownerPubkey,
+        ataAddress,
+        ownerPubkey,
+        mintPubkey
+      );
+      
+      return {
+        exists: false,
+        address: ataAddress,
+        createInstruction
+      };
+    }
+  }
+  
+  // Normal mode - actual ATA check
   const ataAddress = await getAssociatedTokenAddress(
     mintPubkey,
     ownerPubkey,
@@ -126,25 +174,7 @@ function buildRaydiumSwapInstruction(
   // raw instruction with the proper accounts and data
   // This is simplified for this example
   
-  // Example structure of a swap instruction (pseudocode)
-  // Actual implementation would involve proper buffer encoding and program IDs
-  
-  /*
-  return new TransactionInstruction({
-    keys: [
-      { pubkey: poolPubkey, isSigner: false, isWritable: true },
-      { pubkey: ownerPubkey, isSigner: true, isWritable: false },
-      { pubkey: baseTokenAccount, isSigner: false, isWritable: true },
-      { pubkey: quoteTokenAccount, isSigner: false, isWritable: true },
-      ... other required accounts ...
-    ],
-    programId: RAYDIUM_SWAP_PROGRAM_ID,
-    data: Buffer.from(... encoded instruction data ...)
-  });
-  */
-  
-  // For this example, since we can't include the full Raydium SDK,
-  // we'll just log what would happen and return a dummy instruction
+  // Log what would be built in real scenario
   logger.info(`Would build Raydium swap with: Amount In=${amountIn}, Min Out=${minAmountOut}`);
   
   // In production, replace with actual instruction building
@@ -156,6 +186,84 @@ function buildRaydiumSwapInstruction(
 }
 
 /**
+ * Simulates a transaction for DryRun mode
+ * @param {string} txId - Transaction ID
+ * @param {Object} tokenData - Token data
+ * @param {number} amountInSol - SOL amount for the transaction
+ * @returns {Promise<{success: boolean, signature: string, error?: string, buyData?: Object}>}
+ */
+async function simulateTransaction(txId, tokenData, amountInSol) {
+  const { baseMint, quoteMint, lpAddress } = tokenData;
+  
+  txLogger.info(`DryRun: Simulating swap transaction`, { txId, baseMint, quoteMint, lpAddress });
+  
+  // Generate a transaction signature for tracking
+  const signature = generateSimulatedSignature();
+  
+  // Simulate transaction processing time
+  const processingTime = config.DRY_RUN_CONFIRMATION_MS + (Math.random() * 2000);
+  txLogger.debug(`DryRun: Simulating processing time of ${processingTime.toFixed(0)}ms`, { txId, signature });
+  
+  await new Promise(resolve => setTimeout(resolve, processingTime));
+  
+  // Simulate success/failure based on success rate
+  const success = Math.random() * 100 < config.DRY_RUN_SUCCESS_RATE;
+  
+  if (!success) {
+    const errors = [
+      'Transaction simulation failed: Error processing Instruction 2: custom program error: 0x1',
+      'Blockhash not found',
+      'Transaction too large',
+      'Insufficient funds for transaction'
+    ];
+    const randomError = errors[Math.floor(Math.random() * errors.length)];
+    
+    txLogger.error(`DryRun: Transaction simulation failed`, { 
+      txId, 
+      signature, 
+      error: randomError 
+    });
+    
+    return {
+      success: false,
+      signature,
+      error: randomError
+    };
+  }
+  
+  // Simulate token amount received (completely made up for demonstration)
+  const tokenAmount = Math.floor(Math.random() * 1000000000) + 100000;
+  const estimatedPrice = amountInSol / (tokenAmount / LAMPORTS_PER_SOL);
+  
+  txLogger.info(`DryRun: Transaction simulation succeeded`, { 
+    txId, 
+    signature, 
+    tokenAmount,
+    estimatedPrice
+  });
+  
+  // Prepare buy data for Redis
+  const buyData = {
+    txId,
+    signature,
+    baseMint,
+    quoteMint,
+    lpAddress,
+    amountInSol,
+    tokenAmount,
+    estimatedPrice,
+    timestamp: Date.now(),
+    isDryRun: true
+  };
+  
+  return {
+    success: true,
+    signature,
+    buyData
+  };
+}
+
+/**
  * Executes a swap transaction to buy a token
  * @param {Object} tokenData - Data about the token to buy
  * @returns {Promise<{success: boolean, signature?: string, error?: string}>}
@@ -164,7 +272,13 @@ async function executeSwap(tokenData) {
   const txId = createTransactionId();
   const { baseMint, quoteMint, lpAddress } = tokenData;
   
-  txLogger.info(`Starting swap transaction`, { txId, baseMint, quoteMint, lpAddress });
+  txLogger.info(`Starting swap transaction`, { 
+    txId, 
+    baseMint, 
+    quoteMint, 
+    lpAddress,
+    dryRun: config.DRY_RUN
+  });
   
   try {
     // Get connection and wallet
@@ -184,9 +298,41 @@ async function executeSwap(tokenData) {
     txLogger.info(`Transaction parameters prepared`, { 
       txId, 
       wallet: walletPubkey.toString(),
-      amountInSol
+      amountInSol,
+      dryRun: config.DRY_RUN
     });
     
+    // If in DryRun mode, simulate the transaction
+    if (config.DRY_RUN) {
+      const result = await simulateTransaction(txId, tokenData, amountInSol);
+      
+      // If successful simulation, publish to Redis
+      if (result.success) {
+        await redisPublisher.publish(
+          REDIS_CHANNELS.SUCCESSFUL_BUYS,
+          JSON.stringify(result.buyData)
+        );
+        
+        // Store in Redis for the sell-manager
+        await redisPublisher.hset(`positions:${baseMint}`, {
+          baseMint,
+          buyPrice: result.buyData.estimatedPrice || 0,
+          amountInSol,
+          tokenAmount: result.buyData.tokenAmount || 0,
+          buyTimestamp: Date.now(),
+          signature: result.signature,
+          isDryRun: true
+        });
+        
+        // Increment buy stats counter
+        await redisPublisher.incr('stats:buy_count');
+      }
+      
+      return result;
+    }
+    
+    // Normal execution mode from here
+
     // Check if we need to create Associated Token Accounts
     txLogger.debug(`Checking token accounts`, { txId });
     
@@ -244,6 +390,39 @@ async function executeSwap(tokenData) {
     instructions.push(swapInstruction);
     txLogger.debug(`Added swap instruction`, { txId });
     
+    // Check if we should simulate the transaction
+    if (config.SIMULATE_TRANSACTIONS) {
+      txLogger.info(`Simulating transaction before sending`, { txId });
+      
+      try {
+        const simulation = await connection.simulateTransaction(instructions);
+        
+        if (simulation.value.err) {
+          txLogger.error(`Transaction simulation failed`, {
+            txId,
+            error: JSON.stringify(simulation.value.err)
+          });
+          
+          return {
+            success: false,
+            error: `Simulation failed: ${JSON.stringify(simulation.value.err)}`
+          };
+        }
+        
+        txLogger.info(`Transaction simulation successful`, { txId });
+      } catch (error) {
+        txLogger.error(`Error during transaction simulation`, {
+          txId,
+          error: error.message
+        });
+        
+        return {
+          success: false,
+          error: `Simulation error: ${error.message}`
+        };
+      }
+    }
+    
     // Get recent blockhash
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash({ 
       commitment: config.SOLANA_COMMITMENT 
@@ -297,6 +476,10 @@ async function executeSwap(tokenData) {
     
     txLogger.info(`Transaction confirmed successfully`, { txId, signature });
     
+    // Fetch the actual tokens received (simplified - in production would query token balance)
+    // This is a placeholder - in a real implementation you'd query the token account
+    const tokenAmount = 1000000; // Placeholder
+    
     // Publish successful buy to Redis
     const buyData = {
       txId,
@@ -306,9 +489,8 @@ async function executeSwap(tokenData) {
       lpAddress,
       amountInSol,
       timestamp: Date.now(),
-      // In a real implementation, fetch the actual amount of tokens received
-      // by querying the token account after the transaction
-      tokenAmount: 0 // Placeholder
+      tokenAmount,
+      isDryRun: false
     };
     
     await redisPublisher.publish(
@@ -321,8 +503,10 @@ async function executeSwap(tokenData) {
       baseMint,
       buyPrice: 0, // Would calculate actual price in production
       amountInSol,
+      tokenAmount,
       buyTimestamp: Date.now(),
-      signature
+      signature,
+      isDryRun: false
     });
     
     // Increment buy stats counter
@@ -354,7 +538,9 @@ async function executeSwap(tokenData) {
 async function processPotentialBuy(message) {
   try {
     const tokenData = JSON.parse(message);
-    logger.info(`Processing potential buy: ${tokenData.baseMint}`);
+    logger.info(`Processing potential buy: ${tokenData.baseMint}`, {
+      dryRun: config.DRY_RUN
+    });
     
     // Check quote token - we usually only want SOL pairs for simplicity
     const isSOLPair = tokenData.quoteMint === SOLANA_ADDRESSES.SOL_MINT.toString();
@@ -368,11 +554,13 @@ async function processPotentialBuy(message) {
     
     if (result.success) {
       logger.info(`Successfully bought ${tokenData.baseMint}`, { 
-        signature: result.signature 
+        signature: result.signature,
+        dryRun: config.DRY_RUN
       });
     } else {
       logger.error(`Failed to buy ${tokenData.baseMint}`, { 
-        error: result.error 
+        error: result.error,
+        dryRun: config.DRY_RUN
       });
     }
   } catch (error) {
@@ -403,7 +591,8 @@ const heartbeatInterval = setInterval(async () => {
     await redisPublisher.set('heartbeat:buy-executor', timestamp);
     await redisPublisher.publish(REDIS_CHANNELS.HEARTBEATS, JSON.stringify({
       service: 'buy-executor',
-      timestamp
+      timestamp,
+      dryRun: config.DRY_RUN
     }));
     logger.debug('Heartbeat sent');
   } catch (error) {
@@ -435,4 +624,4 @@ process.on('uncaughtException', (error) => {
   process.exit(1);
 });
 
-logger.info('Buy Executor service started');
+logger.info(`Buy Executor service started in ${config.DRY_RUN ? 'DRY RUN' : 'LIVE'} mode`);

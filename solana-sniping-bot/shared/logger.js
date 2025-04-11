@@ -9,7 +9,7 @@ const { format, transports, createLogger } = winston;
 const chalk = require('chalk');
 const fs = require('fs');
 const path = require('path');
-const config = require('./config');
+const config = require('./config').default;
 
 // Ensure logs directory exists
 const logsDir = path.join(process.cwd(), 'logs');

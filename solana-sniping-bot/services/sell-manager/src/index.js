@@ -2,6 +2,7 @@
  * @fileoverview Sell Manager Service for Solana Memecoin Sniping Bot
  * Monitors active positions, periodically checks prices, and executes
  * sell transactions based on take-profit and stop-loss conditions.
+ * Includes DryRun mode for transaction simulation.
  */
 
 const Redis = require('ioredis');
@@ -17,11 +18,12 @@ const {
   getAccount,
   TOKEN_PROGRAM_ID 
 } = require('@solana/spl-token');
-const { getConnection } = require('../../../shared/connection');
-const { loadWallet } = require('../../../shared/wallet');
-const { createLogger, createTransactionLogger } = require('../../../shared/logger');
-const config = require('../../../shared/config');
-const { REDIS_CHANNELS, SOLANA_ADDRESSES, PERFORMANCE_SETTINGS } = require('../../../shared/constants');
+const { getConnection } = require('./shared/connection');
+const { loadWallet } = require('./shared/wallet');
+const { createLogger, createTransactionLogger } = require('./shared/logger');
+const config = require('./shared/config');
+const { REDIS_CHANNELS, SOLANA_ADDRESSES, PERFORMANCE_SETTINGS } = require('./shared/constants');
+const { v4: uuidv4 } = require('uuid');
 
 // Initialize loggers
 const logger = createLogger('sell-manager');
@@ -60,6 +62,16 @@ function createTransactionId() {
 }
 
 /**
+ * Generates a simulated transaction signature for DryRun mode
+ * @returns {string} Simulated transaction signature
+ */
+function generateSimulatedSignature() {
+  // Generate a unique signature-like string for tracking
+  const randomBytes = uuidv4().replace(/-/g, '');
+  return randomBytes + 'DryRunSim';
+}
+
+/**
  * Loads active positions from Redis
  * @returns {Promise<void>}
  */
@@ -89,13 +101,16 @@ async function loadPositionsFromRedis() {
         positionData.buyPrice = parseFloat(positionData.buyPrice || '0');
         positionData.amountInSol = parseFloat(positionData.amountInSol || '0');
         positionData.buyTimestamp = parseInt(positionData.buyTimestamp || '0', 10);
+        positionData.tokenAmount = parseInt(positionData.tokenAmount || '0', 10);
+        positionData.isDryRun = positionData.isDryRun === 'true';
         
         // Add to active positions map
         activePositions.set(positionData.baseMint, positionData);
         
         logger.info(`Loaded position for token ${positionData.baseMint}`, {
           amountInSol: positionData.amountInSol,
-          buyTimestamp: new Date(positionData.buyTimestamp).toISOString()
+          buyTimestamp: new Date(positionData.buyTimestamp).toISOString(),
+          isDryRun: positionData.isDryRun
         });
       } catch (error) {
         logger.error(`Error processing position ${key}: ${error.message}`);
@@ -112,12 +127,65 @@ async function loadPositionsFromRedis() {
  * Calculates token price from a liquidity pool
  * @param {string} baseMint - Base token mint address
  * @param {string} lpAddress - Liquidity pool address
+ * @param {boolean} isDryRun - Whether this is a dry run simulation
  * @returns {Promise<{price: number, liquidity: number} | null>}
  */
-async function calculateTokenPrice(baseMint, lpAddress) {
+async function calculateTokenPrice(baseMint, lpAddress, isDryRun) {
   try {
-    logger.debug(`Calculating price for ${baseMint} from pool ${lpAddress}`);
+    logger.debug(`Calculating price for ${baseMint} from pool ${lpAddress}`, { isDryRun });
     
+    const position = activePositions.get(baseMint);
+    
+    if (!position) {
+      logger.warn(`No position data for ${baseMint}`);
+      return null;
+    }
+    
+    // DryRun mode - simulate realistic price movement
+    if (isDryRun || config.DRY_RUN) {
+      // Initial price is the buy price or 1.0 if not set
+      const initialPrice = position.buyPrice || 1.0;
+      
+      // Calculate time since buy (in minutes)
+      const minutesSinceBuy = (Date.now() - position.buyTimestamp) / (1000 * 60);
+      
+      // Create semi-realistic price movement based on time
+      // Memecoin prices are often volatile in the first hour, then stabilize or decline
+      
+      let multiplier;
+      const randomFactor = (Math.random() * config.DRY_RUN_PRICE_VOLATILITY) / 100;
+      
+      if (minutesSinceBuy < 10) {
+        // First 10 minutes - high volatility up or down
+        multiplier = 1 + (Math.random() > 0.5 ? randomFactor * 3 : -randomFactor * 2);
+      } else if (minutesSinceBuy < 60) {
+        // First hour - gradually trend up with volatility
+        multiplier = 1 + ((Math.random() * 1.5) - 0.5) * randomFactor;
+      } else {
+        // After first hour - gradually trend down with some spikes
+        const downwardPressure = Math.min(0.7, minutesSinceBuy / 300); // Max 70% downward trend
+        multiplier = 1 + ((Math.random() * 1.2) - downwardPressure) * randomFactor;
+      }
+      
+      // Apply multiplier to current price
+      const newPrice = initialPrice * multiplier;
+      
+      // Simulate some liquidity value
+      const liquidity = 5 + (Math.random() * 20);
+      
+      // Calculate percent change from initial buy price
+      const priceChangePercent = ((newPrice / initialPrice) - 1) * 100;
+      
+      logger.debug(`DryRun: Calculated price for ${baseMint}: ${newPrice.toFixed(8)} SOL/token (change: ${priceChangePercent.toFixed(2)}%), liquidity: ${liquidity.toFixed(2)} SOL`);
+      
+      return {
+        price: newPrice,
+        liquidity,
+        priceChangePercent
+      };
+    }
+    
+    // LIVE mode - fetch real price from blockchain
     const connection = await getConnection();
     
     // In a real implementation, you would:
@@ -132,14 +200,6 @@ async function calculateTokenPrice(baseMint, lpAddress) {
     
     // For this example, we'll simulate by getting a random price
     // with some reasonable parameters to simulate price movement
-    
-    // Get the position data to simulate price relative to buy price
-    const position = activePositions.get(baseMint);
-    
-    if (!position) {
-      logger.warn(`No position data for ${baseMint}`);
-      return null;
-    }
     
     // Initial price is the buy price or 1.0 if not set
     const initialPrice = position.buyPrice || 1.0;
@@ -204,6 +264,93 @@ function buildSellSwapInstructions(params) {
 }
 
 /**
+ * Simulates a sell transaction for DryRun mode
+ * @param {string} txId - Transaction ID
+ * @param {string} baseMint - Token mint address
+ * @param {Object} priceData - Price data 
+ * @param {Object} position - Position data
+ * @returns {Promise<{success: boolean, signature: string, error?: string, sellData?: Object}>}
+ */
+async function simulateSellTransaction(txId, baseMint, priceData, position) {
+  txLogger.info(`DryRun: Simulating sell transaction`, {
+    txId,
+    baseMint,
+    currentPrice: priceData.price,
+    priceChangePercent: priceData.priceChangePercent
+  });
+  
+  // Generate a transaction signature for tracking
+  const signature = generateSimulatedSignature();
+  
+  // Simulate transaction processing time
+  const processingTime = config.DRY_RUN_CONFIRMATION_MS + (Math.random() * 2000);
+  txLogger.debug(`DryRun: Simulating processing time of ${processingTime.toFixed(0)}ms`, { txId, signature });
+  
+  await new Promise(resolve => setTimeout(resolve, processingTime));
+  
+  // Simulate success/failure based on success rate
+  const success = Math.random() * 100 < config.DRY_RUN_SUCCESS_RATE;
+  
+  if (!success) {
+    const errors = [
+      'Transaction simulation failed: Error processing Instruction 2: custom program error: 0x1',
+      'Blockhash not found',
+      'Transaction too large',
+      'Insufficient funds for transaction'
+    ];
+    const randomError = errors[Math.floor(Math.random() * errors.length)];
+    
+    txLogger.error(`DryRun: Transaction simulation failed`, { 
+      txId, 
+      signature, 
+      error: randomError 
+    });
+    
+    return {
+      success: false,
+      signature,
+      error: randomError
+    };
+  }
+  
+  // Calculate profit/loss
+  const tokenAmount = position.tokenAmount || 1000000; // Use position data or default
+  const expectedSolAmount = tokenAmount * priceData.price / LAMPORTS_PER_SOL;
+  const boughtForSol = position.amountInSol;
+  const profitLossSol = expectedSolAmount - boughtForSol;
+  const profitLossPercent = ((expectedSolAmount / boughtForSol) - 1) * 100;
+  
+  txLogger.info(`DryRun: Sell transaction successful`, { 
+    txId, 
+    signature, 
+    soldForSol: expectedSolAmount,
+    boughtForSol,
+    profitLossSol,
+    profitLossPercent
+  });
+  
+  // Prepare sell data
+  const sellData = {
+    txId,
+    signature,
+    baseMint,
+    tokenAmount,
+    soldForSol: expectedSolAmount,
+    boughtForSol,
+    profitLossSol,
+    profitLossPercent,
+    timestamp: Date.now(),
+    isDryRun: true
+  };
+  
+  return {
+    success: true,
+    signature,
+    sellData
+  };
+}
+
+/**
  * Executes a sell transaction for a token
  * @param {string} baseMint - Base token mint address 
  * @param {Object} priceData - Current price data
@@ -218,9 +365,32 @@ async function executeSellTransaction(baseMint, priceData, position) {
     baseMint, 
     currentPrice: priceData.price,
     buyPrice: position.buyPrice,
-    priceChangePercent: priceData.priceChangePercent
+    priceChangePercent: priceData.priceChangePercent,
+    isDryRun: position.isDryRun || config.DRY_RUN
   });
   
+  // If in DryRun mode or position was created in DryRun, simulate the transaction
+  if (position.isDryRun || config.DRY_RUN) {
+    const result = await simulateSellTransaction(txId, baseMint, priceData, position);
+    
+    // If successful simulation, publish to Redis and clean up
+    if (result.success) {
+      await redisClient.publish(
+        REDIS_CHANNELS.SUCCESSFUL_SELLS,
+        JSON.stringify(result.sellData)
+      );
+      
+      // Remove from active positions in Redis
+      await redisClient.del(`positions:${baseMint}`);
+      
+      // Increment sell stats counter
+      await redisClient.incr('stats:sell_count');
+    }
+    
+    return result;
+  }
+  
+  // LIVE mode - execute real transaction
   try {
     // Get connection and wallet
     const connection = await getConnection();
@@ -271,6 +441,39 @@ async function executeSellTransaction(baseMint, priceData, position) {
       tokenAmount,
       minSolAmount
     });
+    
+    // Check if we should simulate the transaction
+    if (config.SIMULATE_TRANSACTIONS) {
+      txLogger.info(`Simulating transaction before sending`, { txId });
+      
+      try {
+        const simulation = await connection.simulateTransaction(swap.instructions);
+        
+        if (simulation.value.err) {
+          txLogger.error(`Transaction simulation failed`, {
+            txId,
+            error: JSON.stringify(simulation.value.err)
+          });
+          
+          return {
+            success: false,
+            error: `Simulation failed: ${JSON.stringify(simulation.value.err)}`
+          };
+        }
+        
+        txLogger.info(`Transaction simulation successful`, { txId });
+      } catch (error) {
+        txLogger.error(`Error during transaction simulation`, {
+          txId,
+          error: error.message
+        });
+        
+        return {
+          success: false,
+          error: `Simulation error: ${error.message}`
+        };
+      }
+    }
     
     // Get recent blockhash
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash({
@@ -350,7 +553,8 @@ async function executeSellTransaction(baseMint, priceData, position) {
       boughtForSol,
       profitLossSol,
       profitLossPercent,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      isDryRun: false
     };
     
     await redisClient.publish(
@@ -404,7 +608,8 @@ async function evaluateSellConditions(baseMint, priceData, position) {
       currentPrice: priceData.price,
       buyPrice: position.buyPrice,
       takeProfitPct: config.TAKE_PROFIT_PERCENTAGE,
-      stopLossPct: config.STOP_LOSS_PERCENTAGE
+      stopLossPct: config.STOP_LOSS_PERCENTAGE,
+      isDryRun: position.isDryRun || config.DRY_RUN
     });
     
     // Check take profit condition
@@ -446,10 +651,12 @@ async function checkPositionsAndSell() {
   // Process each active position
   for (const [baseMint, position] of activePositions.entries()) {
     try {
-      logger.debug(`Checking position: ${baseMint}`);
+      logger.debug(`Checking position: ${baseMint}`, {
+        isDryRun: position.isDryRun || config.DRY_RUN
+      });
       
-      // Get current price
-      const priceData = await calculateTokenPrice(baseMint, position.lpAddress);
+      // Get current price (pass isDryRun flag)
+      const priceData = await calculateTokenPrice(baseMint, position.lpAddress, position.isDryRun);
       
       if (!priceData) {
         logger.warn(`Failed to get price data for ${baseMint}, skipping`);
@@ -460,7 +667,9 @@ async function checkPositionsAndSell() {
       const { shouldSell, reason } = await evaluateSellConditions(baseMint, priceData, position);
       
       if (shouldSell) {
-        logger.info(`Selling ${baseMint}: ${reason}`);
+        logger.info(`Selling ${baseMint}: ${reason}`, {
+          isDryRun: position.isDryRun || config.DRY_RUN
+        });
         
         // Execute sell transaction
         const result = await executeSellTransaction(baseMint, priceData, position);
@@ -468,13 +677,17 @@ async function checkPositionsAndSell() {
         if (result.success) {
           logger.info(`Successfully sold ${baseMint}`, {
             signature: result.signature,
-            profitLoss: result.sellData.profitLossPercent.toFixed(2) + '%'
+            profitLoss: result.sellData.profitLossPercent.toFixed(2) + '%',
+            isDryRun: position.isDryRun || config.DRY_RUN
           });
           
           // Remove from active positions map
           activePositions.delete(baseMint);
         } else {
-          logger.error(`Failed to sell ${baseMint}`, { error: result.error });
+          logger.error(`Failed to sell ${baseMint}`, { 
+            error: result.error,
+            isDryRun: position.isDryRun || config.DRY_RUN
+          });
         }
       } else {
         logger.debug(`Not selling ${baseMint}: ${reason}`);
@@ -498,7 +711,9 @@ async function processSuccessfulBuy(message) {
       return;
     }
     
-    logger.info(`Processing successful buy: ${buyData.baseMint}`);
+    logger.info(`Processing successful buy: ${buyData.baseMint}`, {
+      isDryRun: buyData.isDryRun || config.DRY_RUN
+    });
     
     // Create position object
     const position = {
@@ -507,26 +722,41 @@ async function processSuccessfulBuy(message) {
       amountInSol: buyData.amountInSol,
       buyTimestamp: buyData.timestamp,
       signature: buyData.signature,
-      tokenAmount: buyData.tokenAmount
+      tokenAmount: buyData.tokenAmount || 0,
+      isDryRun: buyData.isDryRun || config.DRY_RUN
     };
     
-    // Try to calculate an initial price for reference
-    try {
-      const priceData = await calculateTokenPrice(buyData.baseMint, buyData.lpAddress);
-      if (priceData) {
-        position.buyPrice = priceData.price;
-        logger.info(`Set initial price for ${buyData.baseMint}: ${priceData.price}`);
+    // Use provided estimated price if available (from dry run)
+    if (buyData.estimatedPrice) {
+      position.buyPrice = buyData.estimatedPrice;
+      logger.info(`Using provided price for ${buyData.baseMint}: ${buyData.estimatedPrice}`);
+    } else {
+      // Try to calculate an initial price for reference
+      try {
+        const priceData = await calculateTokenPrice(
+          buyData.baseMint, 
+          buyData.lpAddress, 
+          buyData.isDryRun || config.DRY_RUN
+        );
+        
+        if (priceData) {
+          position.buyPrice = priceData.price;
+          logger.info(`Set initial price for ${buyData.baseMint}: ${priceData.price}`);
+        }
+      } catch (error) {
+        logger.warn(`Failed to get initial price for ${buyData.baseMint}: ${error.message}`);
+        position.buyPrice = 0; // Will be updated on next check
       }
-    } catch (error) {
-      logger.warn(`Failed to get initial price for ${buyData.baseMint}: ${error.message}`);
-      position.buyPrice = 0; // Will be updated on next check
     }
     
     // Add to active positions
     activePositions.set(buyData.baseMint, position);
     
     // Also store in Redis (as backup)
-    await redisClient.hset(`positions:${buyData.baseMint}`, position);
+    await redisClient.hset(`positions:${buyData.baseMint}`, {
+      ...position,
+      isDryRun: (position.isDryRun || config.DRY_RUN) ? 'true' : 'false' // Store as string in Redis
+    });
     
     logger.info(`Added position for ${buyData.baseMint} to active monitoring`);
   } catch (error) {
@@ -539,7 +769,9 @@ async function processSuccessfulBuy(message) {
  */
 async function startSellManager() {
   try {
-    logger.info('Starting Sell Manager service');
+    logger.info('Starting Sell Manager service', {
+      mode: config.DRY_RUN ? 'DRY RUN' : 'LIVE'
+    });
     
     // Load existing positions from Redis
     await loadPositionsFromRedis();
@@ -574,7 +806,8 @@ async function startSellManager() {
         await redisClient.publish(REDIS_CHANNELS.HEARTBEATS, JSON.stringify({
           service: 'sell-manager',
           timestamp,
-          activePositions: activePositions.size
+          activePositions: activePositions.size,
+          dryRun: config.DRY_RUN
         }));
         logger.debug('Heartbeat sent');
       } catch (error) {
@@ -600,18 +833,9 @@ async function startSellManager() {
       }, 1000);
     });
     
-    logger.info('Sell Manager service started successfully');
+    logger.info(`Sell Manager service started successfully in ${config.DRY_RUN ? 'DRY RUN' : 'LIVE'} mode`);
   } catch (error) {
     logger.error(`Failed to start Sell Manager: ${error.message}`);
     process.exit(1);
   }
 }
-
-// Handle uncaught exceptions
-process.on('uncaughtException', (error) => {
-  logger.error(`Uncaught exception: ${error.message}\n${error.stack}`);
-  process.exit(1);
-});
-
-// Start the service
-startSellManager();

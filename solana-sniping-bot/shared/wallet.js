@@ -9,7 +9,7 @@
 
 const { Keypair } = require('@solana/web3.js');
 const bs58 = require('bs58');
-const config = require('./config');
+const config = require('./config').default;
 const { createLogger } = require('./logger');
 
 // Initialize logger

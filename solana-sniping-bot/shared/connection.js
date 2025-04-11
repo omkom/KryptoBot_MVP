@@ -4,7 +4,7 @@
  */
 
 const { Connection, clusterApiUrl } = require('@solana/web3.js');
-const config = require('./config');
+const config = require('./config').default;
 const { createLogger } = require('./logger');
 
 // Initialize context-specific logger

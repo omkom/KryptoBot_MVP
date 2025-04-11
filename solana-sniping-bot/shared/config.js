@@ -1,6 +1,7 @@
 /**
  * @fileoverview Configuration loader for Solana memecoin sniping bot
  * Loads and validates environment variables with fallbacks
+ * Includes DryRun mode configuration
  */
 
 require('dotenv').config();
@@ -52,11 +53,20 @@ const config = validateConfig({
   TAKE_PROFIT_PERCENTAGE: parseInt(process.env.TAKE_PROFIT_PERCENTAGE || '150', 10),
   STOP_LOSS_PERCENTAGE: parseInt(process.env.STOP_LOSS_PERCENTAGE || '50', 10),
   
+  // DryRun mode settings
+  DRY_RUN: process.env.DRY_RUN === 'true',
+  DRY_RUN_SUCCESS_RATE: parseInt(process.env.DRY_RUN_SUCCESS_RATE || '90', 10), // % of simulated txs that succeed
+  DRY_RUN_CONFIRMATION_MS: parseInt(process.env.DRY_RUN_CONFIRMATION_MS || '2000', 10), // Simulated confirmation time
+  DRY_RUN_PRICE_VOLATILITY: parseInt(process.env.DRY_RUN_PRICE_VOLATILITY || '20', 10), // % price volatility in simulation
+  
   // Logging
   LOG_LEVEL: process.env.LOG_LEVEL || 'info',
   DEBUG: process.env.DEBUG === 'true',
   LOG_FILE_MAX_SIZE: parseInt(process.env.LOG_FILE_MAX_SIZE || '10485760', 10), // 10MB
-  LOG_MAX_FILES: parseInt(process.env.LOG_MAX_FILES || '5', 10)
+  LOG_MAX_FILES: parseInt(process.env.LOG_MAX_FILES || '5', 10),
+  
+  // Transaction simulation
+  SIMULATE_TRANSACTIONS: process.env.SIMULATE_TRANSACTIONS === 'true',
 });
 
-module.exports = config;
+export default config;

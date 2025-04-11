@@ -10,7 +10,7 @@ const Redis = require('ioredis');
 const fs = require('fs');
 const path = require('path');
 const { createLogger } = require('../../../shared/logger');
-const config = require('../../../shared/config');
+const config = require('../../../shared/config').default;
 const { REDIS_CHANNELS } = require('../../../shared/constants');
 
 // Initialize logger
