@@ -1,12 +1,10 @@
 # Node.js
 node_modules/
-npm-debug.log
-yarn-debug.log
-yarn-error.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 .npm/
 .yarn/
-.pnp/
-.pnp.js
 
 # Runtime data
 logs/
@@ -14,7 +12,6 @@ logs/
 pids/
 *.pid
 *.seed
-*.pid.lock
 
 # Environment variables
 .env
@@ -26,24 +23,21 @@ pids/
 .gitignore
 .github/
 
-# Docker files (avoid recursive copying)
+# Docker files
 **/Dockerfile*
 **/.dockerignore
-docker compose*.yml
+docker-compose*.yml
 
 # Development files
 **/.vscode/
 **/.idea/
 **/.DS_Store
 **/coverage/
-**/test/
+**/*test*/
+**/*.test.js
+**/*.spec.js
 **/.eslintrc*
 **/.prettier*
-**/.editorconfig
-**/*test.js
-**/*.spec.js
-**/*.md
-!README.md
 
 # Build artifacts
 dist/
@@ -56,8 +50,11 @@ tmp/
 temp/
 .tmp/
 
+# Large files that should be mounted
+data/
+
 # Specific project files to exclude
 debugModules.js
-scripts/
-!scripts/profit-tracker.js
-!scripts/performance-analyzer.js
+diagnose.sh
+update-dockerfiles.sh
+docker-fix.js

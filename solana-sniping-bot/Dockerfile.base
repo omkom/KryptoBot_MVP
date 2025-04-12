@@ -1,0 +1,66 @@
+# Base image for Solana Memecoin Sniping Bot services
+# Optimized multi-stage build for minimal size and efficient caching
+
+# Build stage
+FROM node:18-alpine AS builder
+
+WORKDIR /build
+
+# Install build dependencies
+RUN apk add --no-cache --virtual .build-deps \
+    python3 \
+    make \
+    g++ \
+    git
+
+# Copy package files first for better caching
+COPY shared/package*.json ./shared/
+
+# Install shared dependencies
+WORKDIR /build/shared
+RUN npm install --only=production
+
+# Final stage - minimal runtime image
+FROM node:18-alpine
+
+WORKDIR /usr/src/app
+
+ENV NODE_ENV=production \
+    NODE_PATH=/usr/src/app \
+    TZ=UTC
+
+# Only install runtime dependencies
+RUN apk add --no-cache tzdata curl tini && \
+    # Create non-root user
+    addgroup -g 1001 -S solbot && \
+    adduser -u 1001 -S solbot -G solbot && \
+    # Create necessary directories with proper permissions
+    mkdir -p ./shared ./service/src ./logs/errors ./logs/transactions && \
+    chown -R solbot:solbot /usr/src/app
+
+# Copy shared modules from builder
+COPY --from=builder --chown=solbot:solbot /build/shared/node_modules ./shared/node_modules
+
+# Create health check script
+RUN echo 'const http = require("http"); \
+const server = http.createServer((req, res) => { \
+  if (req.url === "/health") { \
+    res.writeHead(200, {"Content-Type": "application/json"}); \
+    res.end(JSON.stringify({status: "ok", service: process.env.SERVICE})); \
+  } else { \
+    res.writeHead(404); res.end(); \
+  } \
+}); \
+server.listen(process.env.HEALTH_PORT || 3000, () => { \
+  console.log(`Health check running on port ${process.env.HEALTH_PORT || 3000}`); \
+}); \
+' > /usr/src/app/healthcheck.js
+
+# Use tini for proper signal handling
+ENTRYPOINT ["/sbin/tini", "--"]
+
+# Switch to non-root user
+USER solbot
+
+# Default command (will be overridden by service Dockerfiles)
+CMD ["node", "service/src/index.js"]

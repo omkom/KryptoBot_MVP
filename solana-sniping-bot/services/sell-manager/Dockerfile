@@ -1,22 +1,17 @@
-# Simplified Dockerfile for sell-manager
+# Service-specific Dockerfile for ${SERVICE_NAME}
 ARG NODE_VERSION=18
 
-FROM node:${NODE_VERSION}-alpine
+# Build using the base image
+FROM solana-bot-base:18
 
-# Set working directory
-WORKDIR /usr/src/app
-
-# Install common dependencies
-RUN apk add --no-cache tzdata curl
-
-# Create necessary directories
-RUN mkdir -p ./shared ./service/src ./logs/errors ./logs/transactions
+# Service name argument
+ARG SERVICE_NAME
 
 # Copy shared module files
 COPY ./shared /usr/src/app/shared/
 
 # Copy service package files
-COPY ./services/sell-manager/package*.json ./service/
+COPY ./services/${SERVICE_NAME}/package*.json ./service/
 
 # Install service dependencies
 WORKDIR /usr/src/app/service
@@ -24,12 +19,15 @@ RUN npm install --only=production
 WORKDIR /usr/src/app
 
 # Copy service code
-COPY ./services/sell-manager/src ./service/src/
+COPY ./services/${SERVICE_NAME}/src ./service/src/
 
 # Set environment variables
-ENV SERVICE=sell-manager \
+ENV SERVICE=${SERVICE_NAME} \
     NODE_ENV=production \
     NODE_PATH=/usr/src/app
 
-# Command to run the service directly
-CMD ["node", "service/src/index.js"]
+# Expose health check port (override in docker-compose)
+EXPOSE 3000
+
+# Command to run healthcheck and service
+CMD ["sh", "-c", "node healthcheck.js & node service/src/index.js"]
