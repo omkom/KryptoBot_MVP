@@ -1,35 +1,46 @@
-# Simplified Dockerfile for lp-monitor
+# Service-specific Dockerfile for lp-monitor
 ARG NODE_VERSION=18
 
-FROM node:${NODE_VERSION}-alpine
+# Build stage - uses the base image as a starting point
+FROM solana-bot-base:18 AS base
 
-# Set working directory
-WORKDIR /usr/src/app
-
-# Install common dependencies
-RUN apk add --no-cache tzdata curl
-
-# Create necessary directories
-RUN mkdir -p ./shared ./service/src ./logs/errors ./logs/transactions
+# Set our service argument
+ARG SERVICE_NAME=lp-monitor
 
 # Copy shared module files
 COPY ./shared /usr/src/app/shared/
 
 # Copy service package files
-COPY ./services/lp-monitor/package*.json ./service/
+COPY ./services/${SERVICE_NAME}/package*.json ./service/
 
 # Install service dependencies
 WORKDIR /usr/src/app/service
-RUN npm install --only=production
+RUN npm ci --only=production
 WORKDIR /usr/src/app
 
 # Copy service code
-COPY ./services/lp-monitor/src ./service/src/
+COPY ./services/${SERVICE_NAME}/src ./service/src/
+
+# Create health check endpoint
+RUN echo 'const http = require("http"); \
+const server = http.createServer((req, res) => { \
+  if (req.url === "/health") { \
+    res.writeHead(200, {"Content-Type": "application/json"}); \
+    res.end(JSON.stringify({status: "ok", service: "lp-monitor"})); \
+  } else { \
+    res.writeHead(404); res.end(); \
+  } \
+}); \
+server.listen(3001, () => console.log("Health check running on :3001")); \
+require("./service/src/index.js");' > /usr/src/app/server.js
 
 # Set environment variables
-ENV SERVICE=lp-monitor \
+ENV SERVICE=${SERVICE_NAME} \
     NODE_ENV=production \
     NODE_PATH=/usr/src/app
 
-# Command to run the service directly
-CMD ["node", "service/src/index.js"]
+# Expose health check port
+EXPOSE 3001
+
+# Command to run the service with health check
+CMD ["node", "server.js"]

@@ -1,10 +1,21 @@
+version: '3.9'
+
 services:
+  # Base image build stage (not a running service)
+  base-image:
+    build:
+      context: .
+      dockerfile: Dockerfile.base
+    image: solana-bot-base:18
+    profiles: ["build"]
+
+  # Redis message broker
   redis:
     image: redis:7-alpine
     container_name: redis_sniper
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     restart: unless-stopped
@@ -12,24 +23,38 @@ services:
       - sniper-net
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 10s
+      interval: 10s
+      timeout: 5s
       retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+        reservations:
+          memory: 128M
 
+  # LP Monitor service - detects new liquidity pools
   lp-monitor:
     build:
       context: .
       dockerfile: services/lp-monitor/Dockerfile
+      args:
+        SERVICE_NAME: lp-monitor
+    image: solana-bot-lp-monitor:latest
     container_name: lp_monitor_sniper
     restart: unless-stopped
     networks:
       - sniper-net
     volumes:
       - ./logs:/usr/src/app/logs
+      - type: tmpfs
+        target: /tmp
     env_file:
       - .env
     environment:
       - NODE_PATH=/usr/src/app
+      - SERVICE=lp-monitor
     depends_on:
       redis:
         condition: service_healthy
@@ -37,90 +62,176 @@ services:
       resources:
         limits:
           memory: 512M
+        reservations:
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
+  # Token Filter service - analyzes and filters tokens
   token-filter:
     build:
       context: .
       dockerfile: services/token-filter/Dockerfile
+      args:
+        SERVICE_NAME: token-filter
+    image: solana-bot-token-filter:latest
     container_name: token_filter_sniper
     restart: unless-stopped
     networks:
       - sniper-net
     volumes:
       - ./logs:/usr/src/app/logs
+      - type: tmpfs
+        target: /tmp
     env_file:
       - .env
     environment:
       - NODE_PATH=/usr/src/app
+      - SERVICE=token-filter
     depends_on:
       redis:
         condition: service_healthy
+      lp-monitor:
+        condition: service_started
     deploy:
       resources:
         limits:
           memory: 512M
+        reservations:
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
+  # Buy Executor service - executes buy transactions
   buy-executor:
     build:
       context: .
       dockerfile: services/buy-executor/Dockerfile
+      args:
+        SERVICE_NAME: buy-executor
+    image: solana-bot-buy-executor:latest
     container_name: buy_executor_sniper
     restart: unless-stopped
     networks:
       - sniper-net
     volumes:
       - ./logs:/usr/src/app/logs
+      - type: tmpfs
+        target: /tmp
     env_file:
       - .env
     environment:
       - NODE_PATH=/usr/src/app
+      - SERVICE=buy-executor
     depends_on:
       redis:
         condition: service_healthy
+      token-filter:
+        condition: service_started
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: 768M
+        reservations:
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
+  # Sell Manager service - manages sell positions
   sell-manager:
     build:
       context: .
       dockerfile: services/sell-manager/Dockerfile
+      args:
+        SERVICE_NAME: sell-manager
+    image: solana-bot-sell-manager:latest
     container_name: sell_manager_sniper
     restart: unless-stopped
     networks:
       - sniper-net
     volumes:
       - ./logs:/usr/src/app/logs
+      - type: tmpfs
+        target: /tmp
     env_file:
       - .env
     environment:
       - NODE_PATH=/usr/src/app
+      - SERVICE=sell-manager
     depends_on:
       redis:
         condition: service_healthy
+      buy-executor:
+        condition: service_started
     deploy:
       resources:
         limits:
-          memory: 512M
-      
+          memory: 768M
+        reservations:
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # API Server service - provides API and monitoring
   api-server:
     build:
       context: .
       dockerfile: services/api-server/Dockerfile
+      args:
+        SERVICE_NAME: api-server
+    image: solana-bot-api-server:latest
     container_name: api_server_sniper
     restart: unless-stopped
     networks:
       - sniper-net
     volumes:
       - ./logs:/usr/src/app/logs
+      - type: tmpfs
+        target: /tmp
     env_file:
       - .env
     environment:
       - NODE_PATH=/usr/src/app
+      - SERVICE=api-server
       - API_SERVER_PORT=3000
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     depends_on:
       redis:
         condition: service_healthy
@@ -128,10 +239,27 @@ services:
       resources:
         limits:
           memory: 512M
+        reservations:
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 networks:
   sniper-net:
     driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.28.0.0/16
 
 volumes:
   redis_data:

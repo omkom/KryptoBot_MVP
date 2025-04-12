@@ -1,40 +1,65 @@
-# Service-specific Dockerfile
-ARG NODE_VERSION=18
-ARG SERVICE_NAME
+# Base image for Solana Memecoin Sniping Bot services
+# This multi-stage build pattern optimizes image size and layer caching
 
-FROM node:${NODE_VERSION}-alpine
+# Build stage
+FROM node:18-alpine AS builder
+
+# Set working directory
+WORKDIR /build
+
+# Install build dependencies
+RUN apk add --no-cache --virtual .build-deps \
+    python3 \
+    make \
+    g++ \
+    git
+
+# Copy package files first (for better layer caching)
+COPY shared/package*.json ./shared/
+COPY services/*/package*.json ./
+
+# Install shared dependencies first
+WORKDIR /build/shared
+RUN npm ci --only=production
+
+# Final stage
+FROM node:18-alpine
+
+# Set environment variables
+ENV NODE_ENV=production \
+    NODE_PATH=/usr/src/app \
+    TZ=UTC
+
+# Install production dependencies
+RUN apk add --no-cache \
+    tzdata \
+    curl \
+    bash \
+    tini
+
+# Create non-root user for security
+RUN addgroup -g 1001 -S solbot && \
+    adduser -u 1001 -S solbot -G solbot
 
 # Set working directory
 WORKDIR /usr/src/app
 
-# Install common dependencies
-RUN apk add --no-cache tzdata curl
+# Create necessary directories with proper permissions
+RUN mkdir -p \
+    ./shared \
+    ./service/src \
+    ./logs/errors \
+    ./logs/transactions && \
+    chown -R solbot:solbot /usr/src/app
 
-# Create necessary directories
-RUN mkdir -p ./shared ./service/src ./logs/errors ./logs/transactions
+# Copy from builder stage
+COPY --from=builder --chown=solbot:solbot /build/shared/node_modules ./shared/node_modules
 
-# Copy shared module files first
-COPY ./shared /usr/src/app/shared/
+# Use tini as entrypoint for proper signal handling
+ENTRYPOINT ["/sbin/tini", "--"]
 
-# Copy service package files
-COPY ./services/${SERVICE_NAME}/package*.json ./service/
+# Switch to non-root user
+USER solbot
 
-# Install service dependencies
-WORKDIR /usr/src/app/service
-RUN npm install --only=production
-WORKDIR /usr/src/app
-
-# Copy service code
-COPY ./services/${SERVICE_NAME}/src ./service/src/
-
-# Set environment variables
-ENV SERVICE=${SERVICE_NAME} \
-    NODE_ENV=production \
-    NODE_PATH=/usr/src/app
-
-# Debug script to verify environment
-RUN echo '#!/bin/sh\necho "Service: ${SERVICE_NAME}"\necho "Service directories:"\nls -la /usr/src/app\necho "\nShared modules:"\nls -la /usr/src/app/shared\necho "\nService files:"\nls -la /usr/src/app/service/src\necho "\nNode path:"\necho $NODE_PATH\necho "\nStarting service..."\nnode /usr/src/app/service/src/index.js' > /usr/src/app/start.sh && \
-    chmod +x /usr/src/app/start.sh
-
-# Command to run the service
-CMD ["/usr/src/app/start.sh"]
+# Default command (overridden by service-specific Dockerfiles)
+CMD ["node", "service/src/index.js"]

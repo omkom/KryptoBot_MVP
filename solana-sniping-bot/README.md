@@ -35,7 +35,7 @@ Solana RPC/WS -> lp-monitor -> Redis (new_pools) -> token-filter -> Redis (poten
 
 ```
 solana-sniping-bot/
-├── docker-compose.yml
+├── docker compose.yml
 ├── .env.example             # Example environment variables
 ├── .env                     # Actual environment variables (git ignored)
 ├── services/
@@ -202,7 +202,7 @@ solana-sniping-bot/
     *   Run npm ci --only=production (or npm install if development deps needed).
     *   Copy the service's src/ directory and the shared shared/ directory.
     *   Define the CMD to run the service's entry point (e.g., node src/index.js).
-2.  **Create docker-compose.yml:**
+2.  **Create docker compose.yml:**
     *   Define services: redis, lp-monitor, token-filter, buy-executor, sell-manager, api-server (optional).
     *   Use the official redis:alpine image for the redis service.
     *   For Node.js services, specify build: ./services/<service-name>.
@@ -231,7 +231,7 @@ solana-sniping-bot/
 ## 10. Testing Strategy
 
 -   **Unit Tests:** Use a framework like Jest to test individual functions within shared utilities and service logic (mocking external dependencies like RPC calls, Redis).
--   **Integration Tests:** Write tests that run within the Docker Compose environment (docker-compose exec <service> npm test) to verify interactions between services via Redis.
+-   **Integration Tests:** Write tests that run within the Docker Compose environment (docker compose exec <service> npm test) to verify interactions between services via Redis.
 -   **Simulation:** Test against Solana Devnet or Testnet before mainnet deployment.
 -   **Canary Testing:** Deploy with a very small buy amount on mainnet initially.
 -   **Manual Testing:** Use the API (if built) or docker exec to trigger actions and monitor behavior.
@@ -239,7 +239,7 @@ solana-sniping-bot/
 ## 11. Deployment & Operations
 
 -   **Environment Configuration:** Maintain separate .env files or configuration management for different environments (dev, staging, production).
--   **Deployment:** Use docker-compose up -d to start the services in the background.
--   **Updates:** Pull new code, rebuild images (docker-compose build), and restart services (docker-compose up -d --force-recreate).
+-   **Deployment:** Use docker compose up -d to start the services in the background.
+-   **Updates:** Pull new code, rebuild images (docker compose build), and restart services (docker compose up -d --force-recreate).
 -   **Monitoring:** Continuously monitor logs, container health, and resource usage.
 -   **Backup:** Regularly back up persistent log data if required.

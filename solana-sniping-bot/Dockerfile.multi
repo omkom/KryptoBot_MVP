@@ -1,0 +1,127 @@
+# Multi-stage build for all Solana Memecoin Sniping Bot services
+# This file allows building all services from a single Dockerfile
+# Usage: docker build -t solana-bot:latest --build-arg TARGET_SERVICE=SERVICE_NAME -f Dockerfile.multi .
+
+# Base build stage
+FROM node:18-alpine AS base
+
+# Install common dependencies
+RUN apk add --no-cache --virtual .build-deps \
+    python3 \
+    make \
+    g++ \
+    git \
+    && apk add --no-cache \
+    tzdata \
+    curl \
+    bash \
+    tini
+
+# Set working directory
+WORKDIR /build
+
+# Create service directories 
+RUN mkdir -p ./shared ./services
+
+# Copy shared package files first for better caching
+COPY shared/package*.json ./shared/
+
+# Copy all service package files
+COPY services/*/package*.json ./services/
+
+# Install shared dependencies
+WORKDIR /build/shared
+RUN npm ci --only=production
+
+# Build stage for each service
+FROM base AS lp-monitor-builder
+WORKDIR /build/services/lp-monitor
+COPY services/lp-monitor/package*.json ./
+RUN npm ci --only=production
+COPY services/lp-monitor/src ./src
+
+FROM base AS token-filter-builder
+WORKDIR /build/services/token-filter
+COPY services/token-filter/package*.json ./
+RUN npm ci --only=production
+COPY services/token-filter/src ./src
+
+FROM base AS buy-executor-builder
+WORKDIR /build/services/buy-executor
+COPY services/buy-executor/package*.json ./
+RUN npm ci --only=production
+COPY services/buy-executor/src ./src
+
+FROM base AS sell-manager-builder
+WORKDIR /build/services/sell-manager
+COPY services/sell-manager/package*.json ./
+RUN npm ci --only=production
+COPY services/sell-manager/src ./src
+
+FROM base AS api-server-builder
+WORKDIR /build/services/api-server
+COPY services/api-server/package*.json ./
+RUN npm ci --only=production
+COPY services/api-server/src ./src
+
+# Final stage - uses ARG to build a specific service image
+FROM node:18-alpine AS release
+
+# Service selection argument
+ARG TARGET_SERVICE=lp-monitor
+ENV SERVICE=${TARGET_SERVICE}
+
+# Set environment variables
+ENV NODE_ENV=production \
+    NODE_PATH=/usr/src/app \
+    TZ=UTC
+
+# Install production runtime dependencies
+RUN apk add --no-cache tzdata curl bash tini
+
+# Create non-root user for security
+RUN addgroup -g 1001 -S solbot && \
+    adduser -u 1001 -S solbot -G solbot
+
+# Set working directory
+WORKDIR /usr/src/app
+
+# Create necessary directories with proper permissions
+RUN mkdir -p ./shared ./service/src ./logs/errors ./logs/transactions && \
+    chown -R solbot:solbot /usr/src/app
+
+# Copy shared modules
+COPY --from=base --chown=solbot:solbot /build/shared /usr/src/app/shared
+
+# Health check script
+COPY healthcheck.js /usr/src/app/
+
+# Set health check port based on service
+RUN if [ "$TARGET_SERVICE" = "lp-monitor" ]; then export HEALTH_PORT=3001; \
+    elif [ "$TARGET_SERVICE" = "token-filter" ]; then export HEALTH_PORT=3002; \
+    elif [ "$TARGET_SERVICE" = "buy-executor" ]; then export HEALTH_PORT=3003; \
+    elif [ "$TARGET_SERVICE" = "sell-manager" ]; then export HEALTH_PORT=3004; \
+    elif [ "$TARGET_SERVICE" = "api-server" ]; then export HEALTH_PORT=3000; \
+    else export HEALTH_PORT=3999; \
+    fi && \
+    echo "ENV HEALTH_PORT=$HEALTH_PORT" >> /usr/src/app/Dockerfile.fragment
+
+# Copy the appropriate service based on the TARGET_SERVICE argument
+COPY --from=lp-monitor-builder --chown=solbot:solbot /build/services/lp-monitor /usr/src/app/service
+COPY --from=token-filter-builder --chown=solbot:solbot /build/services/token-filter /usr/src/app/service
+COPY --from=buy-executor-builder --chown=solbot:solbot /build/services/buy-executor /usr/src/app/service
+COPY --from=sell-manager-builder --chown=solbot:solbot /build/services/sell-manager /usr/src/app/service
+COPY --from=api-server-builder --chown=solbot:solbot /build/services/api-server /usr/src/app/service
+
+# Use tini as init process for proper signal handling
+ENTRYPOINT ["/sbin/tini", "--"]
+
+# Switch to non-root user
+USER solbot
+
+# Run healthcheck and the service
+CMD ["node", "-e", "require('./healthcheck.js'); require('./service/src/index.js');"]
+
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
+    CMD curl -f http://localhost:$HEALTH_PORT/health || exit 1

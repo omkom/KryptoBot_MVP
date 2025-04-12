@@ -21,19 +21,19 @@ fi
 
 # Check container status
 echo -e "${BLUE}Container Status:${NC}"
-docker-compose ps
+docker compose ps
 
 # Check container logs for errors
 echo -e "\n${BLUE}Checking for errors in container logs:${NC}"
 for service in redis lp-monitor token-filter buy-executor sell-manager api-server; do
     echo -e "${YELLOW}$service:${NC}"
-    docker-compose logs --tail=20 $service | grep -i "error\|exception\|fail" || echo "No errors found"
+    docker compose logs --tail=20 $service | grep -i "error\|exception\|fail" || echo "No errors found"
     echo ""
 done
 
 # Check Redis connectivity
 echo -e "${BLUE}Testing Redis connectivity:${NC}"
-docker-compose exec redis redis-cli ping || echo -e "${RED}Failed to connect to Redis${NC}"
+docker compose exec redis redis-cli ping || echo -e "${RED}Failed to connect to Redis${NC}"
 
 # Check if logs directory exists and has proper permissions
 echo -e "\n${BLUE}Checking logs directory:${NC}"
@@ -48,6 +48,6 @@ fi
 
 # Check network connectivity between containers
 echo -e "\n${BLUE}Testing inter-container connectivity:${NC}"
-docker-compose exec token-filter ping -c 1 redis || echo -e "${RED}Network connectivity issue between token-filter and redis${NC}"
+docker compose exec token-filter ping -c 1 redis || echo -e "${RED}Network connectivity issue between token-filter and redis${NC}"
 
 echo -e "\n${GREEN}Diagnostic complete!${NC}"

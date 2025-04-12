@@ -1,0 +1,118 @@
+version: '3.9'
+
+services:
+  # Redis message broker
+  redis:
+    ports:
+      - "6379:6379"  # Expose directly for development
+    command: redis-server --appendonly yes --loglevel verbose
+    volumes:
+      - redis_data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro  # Mount custom config if needed
+
+  # LP Monitor service
+  lp-monitor:
+    build:
+      context: .
+      dockerfile: services/lp-monitor/Dockerfile.dev
+    command: npm run dev
+    environment:
+      - NODE_ENV=development
+      - DEBUG=true
+      - LOG_LEVEL=debug
+    volumes:
+      - ./services/lp-monitor/src:/usr/src/app/service/src:ro
+      - ./shared:/usr/src/app/shared:ro
+      - ./logs:/usr/src/app/logs
+      - lp-monitor-node-modules:/usr/src/app/service/node_modules
+    ports:
+      - "9221:9229"  # Node.js debugger port
+      - "3001:3001"  # Health check endpoint
+
+  # Token Filter service
+  token-filter:
+    build:
+      context: .
+      dockerfile: services/token-filter/Dockerfile.dev
+    command: npm run dev
+    environment:
+      - NODE_ENV=development
+      - DEBUG=true
+      - LOG_LEVEL=debug
+    volumes:
+      - ./services/token-filter/src:/usr/src/app/service/src:ro
+      - ./shared:/usr/src/app/shared:ro
+      - ./logs:/usr/src/app/logs
+      - token-filter-node-modules:/usr/src/app/service/node_modules
+    ports:
+      - "9222:9229"  # Node.js debugger port
+      - "3002:3002"  # Health check endpoint
+
+  # Buy Executor service
+  buy-executor:
+    build:
+      context: .
+      dockerfile: services/buy-executor/Dockerfile.dev
+    command: npm run dev
+    environment:
+      - NODE_ENV=development
+      - DEBUG=true
+      - LOG_LEVEL=debug
+      # Safely enable dry run mode for development
+      - DRY_RUN=true
+    volumes:
+      - ./services/buy-executor/src:/usr/src/app/service/src:ro
+      - ./shared:/usr/src/app/shared:ro
+      - ./logs:/usr/src/app/logs
+      - buy-executor-node-modules:/usr/src/app/service/node_modules
+    ports:
+      - "9223:9229"  # Node.js debugger port
+      - "3003:3003"  # Health check endpoint
+
+  # Sell Manager service
+  sell-manager:
+    build:
+      context: .
+      dockerfile: services/sell-manager/Dockerfile.dev
+    command: npm run dev
+    environment:
+      - NODE_ENV=development
+      - DEBUG=true
+      - LOG_LEVEL=debug
+      # Safely enable dry run mode for development
+      - DRY_RUN=true
+    volumes:
+      - ./services/sell-manager/src:/usr/src/app/service/src:ro
+      - ./shared:/usr/src/app/shared:ro
+      - ./logs:/usr/src/app/logs
+      - sell-manager-node-modules:/usr/src/app/service/node_modules
+    ports:
+      - "9224:9229"  # Node.js debugger port
+      - "3004:3004"  # Health check endpoint
+
+  # API Server service
+  api-server:
+    build:
+      context: .
+      dockerfile: services/api-server/Dockerfile.dev
+    command: npm run dev
+    environment:
+      - NODE_ENV=development
+      - DEBUG=true
+      - LOG_LEVEL=debug
+    volumes:
+      - ./services/api-server/src:/usr/src/app/service/src:ro
+      - ./shared:/usr/src/app/shared:ro
+      - ./logs:/usr/src/app/logs
+      - api-server-node-modules:/usr/src/app/service/node_modules
+    ports:
+      - "3000:3000"  # Main API port
+      - "9225:9229"  # Node.js debugger port
+
+volumes:
+  redis_data:
+  lp-monitor-node-modules:
+  token-filter-node-modules:
+  buy-executor-node-modules:
+  sell-manager-node-modules:
+  api-server-node-modules:

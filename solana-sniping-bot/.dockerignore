@@ -1,0 +1,63 @@
+# Node.js
+node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+.npm/
+.yarn/
+.pnp/
+.pnp.js
+
+# Runtime data
+logs/
+*.log
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Git files
+.git/
+.gitignore
+.github/
+
+# Docker files (avoid recursive copying)
+**/Dockerfile*
+**/.dockerignore
+docker compose*.yml
+
+# Development files
+**/.vscode/
+**/.idea/
+**/.DS_Store
+**/coverage/
+**/test/
+**/.eslintrc*
+**/.prettier*
+**/.editorconfig
+**/*test.js
+**/*.spec.js
+**/*.md
+!README.md
+
+# Build artifacts
+dist/
+build/
+.cache/
+.next/
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+
+# Specific project files to exclude
+debugModules.js
+scripts/
+!scripts/profit-tracker.js
+!scripts/performance-analyzer.js
