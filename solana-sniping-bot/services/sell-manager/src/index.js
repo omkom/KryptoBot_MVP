@@ -30,16 +30,8 @@ const logger = createLogger('sell-manager');
 const txLogger = createTransactionLogger('sell-manager');
 
 // Initialize Redis clients
-const redisSubscriber = new Redis({
-  host: config.REDIS_HOST,
-  port: config.REDIS_PORT,
-  password: config.REDIS_PASSWORD || '',
-  retryStrategy: times => {
-    const delay = Math.min(times * 50, 2000);
-    logger.warn(`Redis connection attempt ${times} failed. Retrying in ${delay}ms`);
-    return delay;
-  }
-});
+const redisSubscriber = createSubscriber('buy-executor');
+const redisPublisher = createPublisher('buy-executor');
 
 const redisClient = new Redis({
   host: config.REDIS_HOST,

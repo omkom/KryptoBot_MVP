@@ -31,22 +31,9 @@ const logger = createLogger('buy-executor');
 const txLogger = createTransactionLogger('buy-executor');
 
 // Initialize Redis clients
-const redisSubscriber = new Redis({
-  host: config.REDIS_HOST,
-  port: config.REDIS_PORT,
-  password: config.REDIS_PASSWORD || '',
-  retryStrategy: times => {
-    const delay = Math.min(times * 50, 2000);
-    logger.warn(`Redis connection attempt ${times} failed. Retrying in ${delay}ms`);
-    return delay;
-  }
-});
-
-const redisPublisher = new Redis({
-  host: config.REDIS_HOST,
-  port: config.REDIS_PORT,
-  password: config.REDIS_PASSWORD || ''
-});
+// Initialize Redis client for subscribing to events
+const redisSubscriber = createSubscriber('buy-executor');
+const redisPublisher = createPublisher('buy-executor');
 
 /**
  * Creates a unique transaction ID for tracking purposes

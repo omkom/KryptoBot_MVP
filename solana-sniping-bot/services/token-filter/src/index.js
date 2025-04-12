@@ -18,22 +18,8 @@ const logger = createLogger('token-filter');
 const LAMPORTS_PER_SOL = 1000000000;
 
 // Initialize Redis clients
-const redisSubscriber = new Redis({
-  host: config.REDIS_HOST,
-  port: config.REDIS_PORT,
-  password: config.REDIS_PASSWORD || '',
-  retryStrategy: times => {
-    const delay = Math.min(times * 50, 2000);
-    logger.warn(`Redis connection attempt ${times} failed. Retrying in ${delay}ms`);
-    return delay;
-  }
-});
-
-const redisPublisher = new Redis({
-  host: config.REDIS_HOST,
-  port: config.REDIS_PORT,
-  password: config.REDIS_PASSWORD || ''
-});
+const redisSubscriber = createSubscriber('token-filter');
+const redisPublisher = createPublisher('token-filter');
 
 /**
  * Validates that an input string is a valid Solana address

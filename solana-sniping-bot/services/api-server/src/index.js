@@ -8,6 +8,7 @@ const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const Redis = require('ioredis');
+const { createSubscriber, createPublisher } = require('shared/redis-helper');
 const fs = require('fs');
 const path = require('path');
 const { createLogger } = require('shared/logger');
@@ -27,16 +28,8 @@ const app = express();
 let server;
 
 // Initialize Redis client for subscribing to events
-const redisSubscriber = new Redis({
-  host: config.REDIS_HOST,
-  port: config.REDIS_PORT,
-  password: config.REDIS_PASSWORD || '',
-  retryStrategy: (times) => {
-    const delay = Math.min(times * 50, 2000);
-    logger.warn(`Redis connection attempt ${times} failed. Retrying in ${delay}ms`);
-    return delay;
-  }
-});
+const redisSubscriber = createSubscriber('api-server');
+const redisPublisher = createPublisher('api-server');
 
 // Middleware
 app.use(express.json());
