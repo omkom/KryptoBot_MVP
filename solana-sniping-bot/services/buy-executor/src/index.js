@@ -22,6 +22,7 @@ const {
 const { getConnection } = require('shared/connection');
 const { loadWallet } = require('shared/wallet');
 const { createLogger, createTransactionLogger } = require('shared/logger');
+const { createSubscriber, createPublisher } = require('shared/redis-helper');
 const config = require('shared/config');
 const { REDIS_CHANNELS, SOLANA_ADDRESSES } = require('shared/constants');
 const { v4: uuidv4 } = require('uuid');
