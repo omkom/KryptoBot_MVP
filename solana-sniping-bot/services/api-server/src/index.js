@@ -1,6 +1,7 @@
 /**
  * @fileoverview API Server for Solana Memecoin Sniping Bot
  * Provides monitoring endpoints and real-time updates via Socket.io
+ * With added port conflict resolution
  */
 
 const express = require('express');
@@ -12,20 +13,18 @@ const path = require('path');
 const { createLogger } = require('shared/logger');
 const config = require('shared/config').default;
 const { REDIS_CHANNELS } = require('shared/constants');
+const portChecker = require('./port-checker');
 
 // Initialize logger
 const logger = createLogger('api-server');
-const PORT = process.env.API_SERVER_PORT || 3000;
+
+// Parse port configurations with fallbacks
+const API_SERVER_PORT = parseInt(process.env.API_SERVER_PORT || '3000', 10);
+const HEALTH_PORT = parseInt(process.env.HEALTH_PORT || '3000', 10);
 
 // Initialize Express app
 const app = express();
-const server = http.createServer(app);
-const io = socketIo(server, {
-  cors: {
-    origin: "*", // In production, restrict this to specific origins
-    methods: ["GET", "POST"]
-  }
-});
+let server;
 
 // Initialize Redis client for subscribing to events
 const redisSubscriber = new Redis({
@@ -165,33 +164,8 @@ app.get('/api/transactions', authenticate, (req, res) => {
   }
 });
 
-// Socket.io connection handling
-io.on('connection', (socket) => {
-  logger.info(`Client connected: ${socket.id}`);
-  
-  // Subscribe to log events when client requests
-  socket.on('subscribe:logs', () => {
-    socket.join('logs');
-    logger.debug(`Client ${socket.id} subscribed to logs`);
-  });
-  
-  // Subscribe to transaction events
-  socket.on('subscribe:transactions', () => {
-    socket.join('transactions');
-    logger.debug(`Client ${socket.id} subscribed to transactions`);
-  });
-  
-  // Subscribe to pool detection events
-  socket.on('subscribe:pools', () => {
-    socket.join('pools');
-    logger.debug(`Client ${socket.id} subscribed to pool events`);
-  });
-  
-  // Handle client disconnection
-  socket.on('disconnect', () => {
-    logger.info(`Client disconnected: ${socket.id}`);
-  });
-});
+// Socket.io configuration will be set once server is created
+let io;
 
 // Redis subscription setup for Socket.io forwarding
 redisSubscriber.on('ready', () => {
@@ -208,6 +182,8 @@ redisSubscriber.on('ready', () => {
 
 // Handle Redis messages and forward to Socket.io
 redisSubscriber.on('message', (channel, message) => {
+  if (!io) return; // Skip if Socket.io isn't initialized yet
+  
   try {
     const data = JSON.parse(message);
     
@@ -242,29 +218,141 @@ redisSubscriber.on('error', (error) => {
   logger.error(`Redis subscriber error: ${error.message}`);
 });
 
-// Start the server
-server.listen(PORT, () => {
-  logger.info(`API server listening on port ${PORT}`);
-});
-
-// Handle graceful shutdown
-process.on('SIGTERM', () => {
-  logger.info('SIGTERM received, shutting down gracefully');
+/**
+ * Creates and starts the health check HTTP server
+ * @param {number} port - Port for the health server
+ * @returns {Promise<http.Server>} - The created server
+ */
+async function startHealthServer(port) {
+  const healthApp = express();
   
-  // Close HTTP server
-  server.close(() => {
-    logger.info('HTTP server closed');
+  // Simple health endpoint
+  healthApp.get('/health', (req, res) => {
+    res.status(200).json({
+      status: 'ok',
+      service: 'api-server',
+      timestamp: new Date().toISOString()
+    });
   });
   
-  // Close Redis connections
-  redisSubscriber.quit();
+  // Find an available port for health check server
+  const healthPort = await portChecker.findAvailablePort(port);
+  if (healthPort === -1) {
+    logger.error(`Could not find available port for health check server starting from ${port}`);
+    throw new Error(`No available port found for health check server`);
+  }
   
-  // Give everything 5 seconds to close, then exit
-  setTimeout(() => {
-    logger.info('Shutting down process');
-    process.exit(0);
-  }, 5000);
-});
+  return new Promise((resolve, reject) => {
+    const healthServer = healthApp.listen(healthPort, () => {
+      logger.info(`Health check server running on port ${healthPort}`);
+      resolve(healthServer);
+    }).on('error', (err) => {
+      logger.error(`Failed to start health server: ${err.message}`);
+      reject(err);
+    });
+  });
+}
+
+/**
+ * Starts the main API server
+ * @returns {Promise<void>}
+ */
+async function startServer() {
+  try {
+    // Check if API server port is available or find one that is
+    const apiPort = await portChecker.findAvailablePort(API_SERVER_PORT);
+    if (apiPort === -1) {
+      logger.error(`Could not find available port for API server starting from ${API_SERVER_PORT}`);
+      throw new Error(`No available port found for API server`);
+    }
+    
+    // Start health check server on a different port if needed
+    let healthServer;
+    if (HEALTH_PORT === API_SERVER_PORT) {
+      // Use a different port for health server
+      healthServer = await startHealthServer(HEALTH_PORT + 1);
+    } else {
+      healthServer = await startHealthServer(HEALTH_PORT);
+    }
+    
+    // Create HTTP server
+    server = http.createServer(app);
+    
+    // Initialize Socket.io
+    io = socketIo(server, {
+      cors: {
+        origin: "*", // In production, restrict this to specific origins
+        methods: ["GET", "POST"]
+      }
+    });
+    
+    // Socket.io connection handling
+    io.on('connection', (socket) => {
+      logger.info(`Client connected: ${socket.id}`);
+      
+      // Subscribe to log events when client requests
+      socket.on('subscribe:logs', () => {
+        socket.join('logs');
+        logger.debug(`Client ${socket.id} subscribed to logs`);
+      });
+      
+      // Subscribe to transaction events
+      socket.on('subscribe:transactions', () => {
+        socket.join('transactions');
+        logger.debug(`Client ${socket.id} subscribed to transactions`);
+      });
+      
+      // Subscribe to pool detection events
+      socket.on('subscribe:pools', () => {
+        socket.join('pools');
+        logger.debug(`Client ${socket.id} subscribed to pool events`);
+      });
+      
+      // Handle client disconnection
+      socket.on('disconnect', () => {
+        logger.info(`Client disconnected: ${socket.id}`);
+      });
+    });
+    
+    // Start the server
+    server.listen(apiPort, () => {
+      logger.info(`API server listening on port ${apiPort}`);
+    });
+    
+    // Handle graceful shutdown
+    const shutdown = async () => {
+      logger.info('SIGTERM received, shutting down gracefully');
+      
+      // Close the health check server
+      if (healthServer) {
+        await new Promise(resolve => healthServer.close(resolve));
+        logger.info('Health check server closed');
+      }
+      
+      // Close HTTP server
+      if (server) {
+        await new Promise(resolve => server.close(resolve));
+        logger.info('HTTP server closed');
+      }
+      
+      // Close Redis connections
+      redisSubscriber.quit();
+      
+      // Give everything 5 seconds to close, then exit
+      setTimeout(() => {
+        logger.info('Shutting down process');
+        process.exit(0);
+      }, 5000);
+    };
+    
+    process.on('SIGTERM', shutdown);
+    process.on('SIGINT', shutdown);
+    
+  } catch (error) {
+    logger.error(`Failed to start server: ${error.message}`);
+    process.exit(1);
+  }
+}
 
 // Handle uncaught exceptions
 process.on('uncaughtException', (error) => {
@@ -273,3 +361,6 @@ process.on('uncaughtException', (error) => {
   // Exit with error code for container orchestration to restart
   process.exit(1);
 });
+
+// Start the server
+startServer();

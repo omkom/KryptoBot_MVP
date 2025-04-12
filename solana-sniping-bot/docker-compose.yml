@@ -244,9 +244,10 @@ services:
       - NODE_PATH=/usr/src/app
       - SERVICE=api-server
       - API_SERVER_PORT=3000
-      - HEALTH_PORT=3000
+      - HEALTH_PORT=3100  # Use a different port for health check
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:3000:3000"  # API Server port
+      - "127.0.0.1:3100:3100"  # Health check port
     depends_on:
       redis:
         condition: service_healthy
@@ -263,7 +264,7 @@ services:
         max-size: "10m"
         max-file: "3"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3100/health"]
       interval: 30s
       timeout: 10s
       retries: 3
